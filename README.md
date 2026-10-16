@@ -22,6 +22,11 @@ An all-in-one, local music studio around [ACE-Step 1.5](https://github.com/ACE-S
 
 ## Install
 
+**Easiest: let an AI agent do it.** Open this folder in Codex, Claude Code or another coding agent and say:
+*"Read AGENTS.md and set up ACE-Step Workbench for me."* `AGENTS.md` walks it through checks, install, verification and troubleshooting.
+
+**Or by hand:**
+
 **Windows:** double-click `install.bat`.
 **Linux:** `./install.sh`
 
