@@ -215,7 +215,7 @@ def ace_check(path: str = ""):
     if not ace.venv_python(d).exists():
         return {"ok": False, "path": str(d), "message": "ACE-Step found, but its environment is not installed. Run 'uv sync' in that folder, or install.bat."}
     ck = d / "checkpoints"
-    models = sorted(p.name for p in ck.iterdir() if p.is_dir()) if ck.is_dir() else []
+    models = sorted(p.name for p in ck.iterdir() if p.is_dir() and not p.name.startswith(".")) if ck.is_dir() else []
     return {"ok": True, "path": str(d), "models": models,
             "message": f"ACE-Step 1.5 found. Models downloaded: {', '.join(models) or 'none yet (they download on first use)'}."}
 
