@@ -1,0 +1,194 @@
+<div class="guide">
+  <nav class="toc" aria-label="Guide contents">
+    <strong>Contents</strong>
+    <a href="#g-start">1. Quick start</a>
+    <a href="#g-tour">2. The tabs at a glance</a>
+    <a href="#g-write">3. Writing songs with AI</a>
+    <a href="#g-providers">4. Plugging in an AI writer</a>
+    <a href="#g-suno">5. Suno mode vs ACE-Step mode</a>
+    <a href="#g-caption">6. Captions that work</a>
+    <a href="#g-lyrics">7. Lyrics and section tags</a>
+    <a href="#g-delivery">8. Delivery and pronunciation</a>
+    <a href="#g-create">9. Generation settings explained</a>
+    <a href="#g-studio">10. Studio: same seed, fix a phrase</a>
+    <a href="#g-lora">11. Training a LoRA</a>
+    <a href="#g-trouble">12. Troubleshooting</a>
+    <a href="#g-gloss">13. Glossary</a>
+  </nav>
+  <article class="doc">
+    <h1>ACE-Step Workbench guide</h1>
+    <p class="lead">Everything you need, in the order you need it. Hover any <span class="tip" data-tip="Like this. Turn tips off in Settings.">i</span> in the app for a short explanation of that control.</p>
+
+    <h2 id="g-start">1. Quick start</h2>
+    <ol class="steps">
+      <li><b>Install once.</b> Run <code>install.bat</code> (Windows) or <code>./install.sh</code> (Linux). It downloads ACE-Step 1.5 next to this app and sets everything up. Models (about 10 GB for the default set) download the first time you generate.</li>
+      <li><b>Start.</b> Run <code>start.bat</code> / <code>./start.sh</code>. Your browser opens the Workbench. The dot at the bottom left turns green when ACE-Step has loaded (first start takes a few minutes).</li>
+      <li><b>Write.</b> Open <b>Write</b>, type an idea ("a sad synthwave song about a robot's last night"), press <b>Write song</b>. No AI writer set up yet? You still get a rule-based draft; see section 4 to plug one in.</li>
+      <li><b>Create.</b> Press <b>Send to Create</b>, then <b>Generate</b>. A 3-minute song takes roughly 10-60 seconds on a modern NVIDIA GPU.</li>
+      <li><b>Refine.</b> Love the melody but one word sounds wrong? Open the song in <b>Studio</b>, fix the line, and re-sing just that part with the same seed (section 10).</li>
+    </ol>
+    <div class="notice">Need: an NVIDIA GPU with 8 GB+ VRAM (12 GB+ recommended, 16 GB+ for LoRA training at comfortable speed), about 20 GB free disk, Windows 10/11 or Linux. Apple Silicon works through ACE-Step's MPS support but is slower.</div>
+
+    <h2 id="g-tour">2. The tabs at a glance</h2>
+    <table>
+      <tr><th>Tab</th><th>What it is for</th></tr>
+      <tr><td>Guide</td><td>This page.</td></tr>
+      <tr><td>Write</td><td>AI songwriter: idea in, title + caption/style + lyrics + tempo/key out. Target ACE-Step (unfiltered) or Suno (safe).</td></tr>
+      <tr><td>Create</td><td>The generator: caption, lyrics, BPM, key, length, seed, LoRA. Results play right there.</td></tr>
+      <tr><td>Studio</td><td>Open one song: re-generate it with the same seed, edit lyrics line by line, fix how words are sung, re-sing a section.</td></tr>
+      <tr><td>Library</td><td>Every song you have made, with its exact settings, searchable.</td></tr>
+      <tr><td>Train</td><td>Build a dataset from your own tracks and train a LoRA (a small add-on that teaches ACE-Step a style or voice).</td></tr>
+      <tr><td>Settings</td><td>ACE-Step location and models, AI writer provider and keys, folders, tips on/off.</td></tr>
+    </table>
+
+    <h2 id="g-write">3. Writing songs with AI</h2>
+    <p>The Write tab turns an idea into a complete, ready-to-generate song. Fill in as much or as little as you like: genre, mood, vocals, language, length. Then:</p>
+    <ul>
+      <li><b>Write song</b> writes everything from scratch.</li>
+      <li><b>Surprise me</b> invents an idea for you.</li>
+      <li><b>Revise</b> applies an instruction to the current song ("make the chorus shorter", "more hopeful bridge", "switch to Spanish").</li>
+      <li><b>Convert</b> moves a song between ACE-Step and Suno format.</li>
+      <li><b>Send to Create</b> fills the generator with the result.</li>
+    </ul>
+    <p>Every field stays editable. The AI is a co-writer, not the boss.</p>
+
+    <h2 id="g-providers">4. Plugging in an AI writer</h2>
+    <p>Settings &rarr; <b>AI writer</b>. Pick a preset, then fill the fields it asks for. Press <b>Test</b> to check it.</p>
+    <table>
+      <tr><th>Provider</th><th>What you need</th><th>Notes</th></tr>
+      <tr><td><b>Ollama</b> (local, free)</td><td>Install from ollama.com, then <code>ollama pull llama3.1:8b</code> (or any model).</td><td>Uncensored and private. Use an "abliterated" or "uncensored" model if a model refuses. Shares your GPU with ACE-Step, so prefer small models (7-14B) or run it on CPU.</td></tr>
+      <tr><td><b>LM Studio / KoboldCpp / llama.cpp / text-generation-webui</b></td><td>Start the app's server, keep the default URL.</td><td>All speak the OpenAI format; pick the matching preset.</td></tr>
+      <tr><td><b>OpenAI (GPT)</b></td><td>An API key from platform.openai.com.</td><td>Hosted: OpenAI's content policy applies.</td></tr>
+      <tr><td><b>Claude API</b></td><td>An API key from console.anthropic.com.</td><td>Hosted: Anthropic's usage policy applies. Default model <code>claude-opus-5-5</code>; <code>claude-haiku-5-5</code> is cheapest.</td></tr>
+      <tr><td><b>Claude Code CLI</b></td><td>Claude Code installed and logged in (<code>claude</code> in a terminal).</td><td>Uses your Claude subscription, no API key. Runs with all tools disabled.</td></tr>
+      <tr><td><b>Codex CLI</b></td><td><code>npm i -g @openai/codex</code>, then <code>codex login</code>.</td><td>Uses your ChatGPT plan. Runs read-only.</td></tr>
+      <tr><td><b>OpenRouter / Groq / DeepSeek</b></td><td>That service's API key.</td><td>OpenRouter gives you hundreds of models, including uncensored community fine-tunes.</td></tr>
+      <tr><td><b>Anything else</b></td><td>Pick "Custom OpenAI-compatible", paste its base URL (ending in <code>/v1</code>) and model name.</td><td>vLLM, Jan, Together, xAI, Mistral, etc.</td></tr>
+    </table>
+    <div class="notice">"Uncensored" here means the Workbench adds no filter of its own: in ACE-Step mode the writer is told to write exactly what you ask. Whether a <i>hosted</i> model complies is up to that company. For unrestricted writing, use a local model.</div>
+
+    <h2 id="g-suno">5. Suno mode vs ACE-Step mode</h2>
+    <table>
+      <tr><th></th><th>ACE-Step mode</th><th>Suno mode</th></tr>
+      <tr><td>Filtering</td><td>None. Explicit lyrics, real references, anything.</td><td>Rephrased so Suno accepts it.</td></tr>
+      <tr><td>Fields</td><td>Caption, lyrics, BPM, key, time signature, length, language</td><td>Style (max 1000 chars), Exclude, Title, Lyrics (max 5000 chars)</td></tr>
+      <tr><td>Section tags</td><td><code>[Chorus - anthemic]</code></td><td><code>[Chorus: anthemic]</code></td></tr>
+      <tr><td>Artist names</td><td>Allowed (though ACE-Step barely knows artists: describe the sound)</td><td>Removed and replaced with sound descriptions</td></tr>
+      <tr><td>Where it goes</td><td>Straight into Create</td><td>Copy buttons + "Open Suno" (paste into Suno's Custom/Advanced mode)</td></tr>
+    </table>
+    <p>Suno mode runs two passes: the AI writer follows Suno's rules, then a local safety net strips "in the style of X" / "X type beat" phrases, removes names on your blocklist, converts tags, trims to Suno's limits and (optionally) softens words Suno's lyric filter tends to flag. <b>Every change is listed</b> under the result so nothing changes silently. Edit the lists in <code>data/suno_blocklist.txt</code> and <code>data/suno_soften.json</code>.</p>
+
+    <h2 id="g-caption">6. Captions that work</h2>
+    <p>The caption is the single most important input. Combine several dimensions:</p>
+    <table>
+      <tr><th>Dimension</th><th>Examples</th></tr>
+      <tr><td>Genre</td><td>melodic techno, indie folk, boom bap, cinematic orchestral, synthwave</td></tr>
+      <tr><td>Mood</td><td>melancholic, euphoric, brooding, intimate, triumphant</td></tr>
+      <tr><td>Instruments</td><td>fingerpicked acoustic guitar, 808 bass, supersaw leads, string section</td></tr>
+      <tr><td>Texture</td><td>warm, crisp, airy, punchy, lush, gritty, lo-fi</td></tr>
+      <tr><td>Vocals</td><td>breathy female vocal, raspy male vocal, choir, falsetto, rap</td></tr>
+      <tr><td>Era / production</td><td>80s gated drums, 90s grunge, modern radio-ready mix, live room recording</td></tr>
+    </table>
+    <ul>
+      <li>Specific beats vague: "sad piano ballad with breathy female vocal" &gt; "sad song".</li>
+      <li>Don't put BPM or key in the caption; use their own fields.</li>
+      <li>Conflicting styles confuse the model. Want a change? Describe it as a journey: "starts as soft piano, explodes into metal".</li>
+      <li>Repeat what you want more of.</li>
+      <li>Artist names do little in ACE-Step: describe what makes that artist sound like that.</li>
+    </ul>
+
+    <h2 id="g-lyrics">7. Lyrics and section tags</h2>
+    <p>Lyrics are the song's timeline. Put each tag on its own line and leave a blank line between sections.</p>
+    <pre>[Intro]
+
+[Verse 1]
+Streetlights hum a song I used to know
+Every window paints a softer glow
+
+[Chorus - anthemic]
+WE RUN until the morning (morning)
+Hearts on fire, never falling
+
+[Guitar Solo]
+
+[Bridge - whispered]
+Hold the line... hold the line
+
+[Outro]</pre>
+    <table>
+      <tr><th>Kind</th><th>Tags</th></tr>
+      <tr><td>Structure</td><td>[Intro] [Verse 1] [Pre-Chorus] [Chorus] [Bridge] [Outro]</td></tr>
+      <tr><td>Energy</td><td>[Build] [Drop] [Breakdown] [high energy] [low energy] [explosive]</td></tr>
+      <tr><td>Instrumental</td><td>[Instrumental] [Guitar Solo] [Piano Interlude] [Drum Break] [Fade Out]</td></tr>
+      <tr><td>Voice</td><td>[whispered] [falsetto] [raspy vocal] [powerful belting] [spoken word] [harmonies] [ad-lib] [call and response]</td></tr>
+    </table>
+    <ul>
+      <li>6-10 syllables per line; matching lines should have similar counts.</li>
+      <li>Keep tag modifiers short: <code>[Chorus - anthemic]</code>, not five adjectives.</li>
+      <li>Make caption and tags agree: a [Guitar Solo] needs guitar in the caption.</li>
+      <li>Want an instrumental? Write just <code>[Instrumental]</code> or tick "Instrumental".</li>
+    </ul>
+
+    <h2 id="g-delivery">8. Delivery and pronunciation</h2>
+    <p>ACE-Step reads lyrics as plain text, so you steer <i>how</i> a word is sung by how you write it. Studio has one-click buttons for all of these.</p>
+    <table>
+      <tr><th>Want</th><th>Write</th><th>Example</th></tr>
+      <tr><td>Shouted / intense</td><td>UPPERCASE</td><td><code>WE WILL NOT FALL</code></td></tr>
+      <tr><td>Backing vocal / echo</td><td>(parentheses)</td><td><code>I'm alive (alive)</code></td></tr>
+      <tr><td>Held note</td><td>stretch the vowel</td><td><code>so lo-o-onely</code>, <code>feeeel</code> (sparingly)</td></tr>
+      <tr><td>Clear separate syllables</td><td>hyphenate</td><td><code>beau-ti-ful</code></td></tr>
+      <tr><td>Breath / pause</td><td>comma or ...</td><td><code>wait... for me</code></td></tr>
+      <tr><td>Wrong pronunciation</td><td>spell it how it sounds</td><td><code>Siobhan</code> &rarr; <code>Shiv-awn</code>, <code>live</code> &rarr; <code>liv</code>, <code>read</code> (past) &rarr; <code>red</code></td></tr>
+      <tr><td>Different voice for one line</td><td>a tag line before it</td><td><code>[whispered]</code> then the line</td></tr>
+    </table>
+    <p>Not sure how to spell it? Select the line in Studio and press <b>Suggest fixes</b>: the AI writer proposes three rewrites for the delivery you describe.</p>
+
+    <h2 id="g-create">9. Generation settings explained</h2>
+    <div id="g-create-params"><p class="muted">Loading the parameter reference...</p></div>
+
+    <h2 id="g-studio">10. Studio: same seed, fix a phrase</h2>
+    <p>Every song stores its exact seed and settings. In Studio you can:</p>
+    <ol>
+      <li><b>Regenerate (same seed).</b> Same seed + same settings = a very similar song. Change a few words in the lyrics first and you get the same musical idea with your new words. Bigger lyric changes drift further, because the lyrics are part of what the model listens to.</li>
+      <li><b>Re-sing a section</b> (repaint). Drag across the waveform to select a few seconds (or pick a lyric line and press <b>Select line's time</b> for an estimate), edit the words for that part, press <b>Re-sing selection</b>. Only that span is regenerated; the rest of the song stays exactly as it was. Best for fixing one word or phrase.</li>
+      <li><b>Variations.</b> Keep everything and change only the seed for a fresh take on the same song.</li>
+    </ol>
+    <div class="notice">Tip: when a single word is mispronounced, combine both tools: respell the word (section 8), then re-sing only that line's few seconds.</div>
+
+    <h2 id="g-lora">11. Training a LoRA</h2>
+    <p>A LoRA is a small file (tens of MB) that teaches ACE-Step a sound: a genre, a production style, a vocal character. You train it from your own tracks.</p>
+    <ol class="steps">
+      <li><b>Collect 8-30 songs</b> that share the sound you want. Use music you own or have the rights to. Full-length, good-quality files (WAV/FLAC/MP3 320).</li>
+      <li><b>Train tab &rarr; New dataset.</b> Name it, add the files. Pick a <b>trigger word</b>: a made-up token like <code>zxsynth</code> that you'll put in captions later.</li>
+      <li><b>Describe each track.</b> Press <b>Auto-label</b> to have ACE-Step estimate BPM, key and a caption for every file; fix anything wrong. Add lyrics for vocal tracks (or mark them instrumental). Better labels = better LoRA.</li>
+      <li><b>Preprocess.</b> Converts audio to training tensors (a few minutes).</li>
+      <li><b>Train.</b> Start with the <b>Balanced</b> preset. Watch the loss chart: it should drop then flatten. Checkpoints are saved along the way.</li>
+      <li><b>Use it.</b> In Create, pick the LoRA, set strength 0.6-1.0, and start your caption with the trigger word.</li>
+    </ol>
+    <div class="notice warn">Training uses the GPU heavily. Close games and other AI apps first. The Workbench stops generation while training.</div>
+    <div id="g-lora-params"></div>
+
+    <h2 id="g-trouble">12. Troubleshooting</h2>
+    <table>
+      <tr><th>Symptom</th><th>Fix</th></tr>
+      <tr><td>Status dot stays yellow for a long time</td><td>First start downloads models (several GB). Watch Settings &rarr; ACE-Step &rarr; Server log.</td></tr>
+      <tr><td>CUDA out of memory</td><td>Close other GPU apps (games, image generators, local LLMs). In Settings pick the smaller LM (0.6B) or turn on "Offload LM to CPU", or disable the LM.</td></tr>
+      <tr><td>The AI writer says "could not reach"</td><td>Its server isn't running (start Ollama / LM Studio), or the URL is wrong. Press Test in Settings.</td></tr>
+      <tr><td>The AI writer refuses</td><td>Hosted models have policies. Switch to a local uncensored model.</td></tr>
+      <tr><td>Garbled or mumbled vocals</td><td>Shorter lines, clearer section tags, fewer stacked tags; fix words in Studio. LoRAs at strength above 1.0 often hurt vocals.</td></tr>
+      <tr><td>Song is cut off or rushed</td><td>Raise Duration; slower BPMs need more time for the same lyrics.</td></tr>
+      <tr><td>Port already in use</td><td>Change it in <code>start.bat</code> (<code>--port</code>) or Settings &rarr; ACE-Step API URL.</td></tr>
+    </table>
+
+    <h2 id="g-gloss">13. Glossary</h2>
+    <table>
+      <tr><td><b>DiT</b></td><td>The diffusion model that actually makes the audio. "turbo" = fast (8 steps), "base" = slower, more controllable, the usual LoRA training target.</td></tr>
+      <tr><td><b>LM</b></td><td>A small language model that plans the song (fills in BPM, key, structure codes) before the DiT renders it. "Thinking" mode uses it more.</td></tr>
+      <tr><td><b>Seed</b></td><td>The random starting point. Same seed + same settings = same song.</td></tr>
+      <tr><td><b>CFG / guidance</b></td><td>How strictly the model follows your caption. Higher = more literal, sometimes harsher.</td></tr>
+      <tr><td><b>Repaint</b></td><td>Regenerate only a time span of an existing song.</td></tr>
+      <tr><td><b>LoRA / LoKr</b></td><td>Small add-on weights that teach a style. LoKr is a lighter, faster-training variant.</td></tr>
+      <tr><td><b>Trigger word</b></td><td>A made-up word you train into a LoRA and put in captions to switch the style on.</td></tr>
+    </table>
+  </article>
+</div>

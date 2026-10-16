@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACE-Step Workbench</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">ACE-Step Workbench<small>write · create · fix · train</small></div>
+    <nav class="nav" aria-label="Main">
+      <button data-tab="guide">📖 Guide</button>
+      <button data-tab="write">✍️ Write</button>
+      <button data-tab="create">🎛️ Create</button>
+      <button data-tab="studio">🎚️ Studio</button>
+      <button data-tab="library">🎧 Library</button>
+      <button data-tab="train">🧪 Train</button>
+      <button data-tab="settings">⚙️ Settings</button>
+    </nav>
+    <div class="status" aria-live="polite">
+      <span class="pill" data-tip="ACE-Step music engine. Green = ready, yellow = loading, grey = stopped. Manage it in Settings."><i class="dot" id="st-ace"></i><span id="st-ace-text">ACE-Step</span></span>
+      <span class="pill" data-tip="Which AI writes your lyrics and prompts. Change it in Settings."><i class="dot ok"></i><span id="st-writer">Writer</span></span>
+      <span class="pill hidden" id="st-train-pill"><i class="dot warn"></i><span id="st-train">Training</span></span>
+    </div>
+  </aside>
+
+  <main>
+    <!-- GUIDE -->
+    <section id="tab-guide" class="page"><div id="guide-body" class="muted">Loading guide...</div></section>
+
+    <!-- WRITE -->
+    <section id="tab-write" class="page">
+      <h1>Write</h1>
+      <p class="lead">Turn an idea into a full song: title, sound description, lyrics, tempo and key. Then send it to Create, or copy it to Suno.</p>
+      <div class="card" id="w-brief">
+        <div class="row">
+          <div class="seg" id="w-target" role="group" aria-label="Target">
+            <button data-t="ace" data-tip="Unfiltered. Writes exactly what you ask for and fills the ACE-Step generator, including BPM, key and length.">ACE-Step (unfiltered)</button>
+            <button data-t="suno" data-tip="Suno-safe. Removes artist names, rephrases words Suno's filter flags, uses Suno's tag format and limits. Every change is listed.">Suno (safe)</button>
+          </div>
+          <span class="spacer"></span>
+          <span class="muted small">Writer: <b id="w-writer">-</b> <a href="#" data-goto="settings">change</a></span>
+        </div>
+        <label class="f" style="margin-top:12px"><span>Song idea <i class="tip" data-tip="Anything from a few words to a paragraph: story, feeling, scene, who is singing to whom. Specific beats vague.">i</i></span>
+          <textarea name="idea" placeholder="e.g. A slow-burning synthwave duet about two night-shift workers who only ever meet at the 3am bus stop"></textarea></label>
+        <div class="grid g4" style="margin-top:10px">
+          <label class="f"><span>Genre <i class="tip" data-tip="Optional. e.g. melodic techno, indie folk, trap, 80s power ballad.">i</i></span><input type="text" name="genre" placeholder="any"></label>
+          <label class="f"><span>Mood</span><input type="text" name="mood" placeholder="any"></label>
+          <label class="f"><span>Vocals</span>
+            <select name="vocals"><option value="auto">Auto</option><option value="female">Female</option><option value="male">Male</option><option value="duet">Duet</option><option value="choir">Choir</option><option value="rap">Rap</option><option value="instrumental">Instrumental (no vocals)</option></select></label>
+          <label class="f"><span>Lyric language</span><input type="text" name="language" placeholder="English"></label>
+        </div>
+        <div class="grid g3" style="margin-top:10px">
+          <label class="f"><span>Length</span>
+            <select name="length"><option value="">Normal (~3 min)</option><option value="short, about 1.5 minutes, one verse and chorus">Short (~1.5 min)</option><option value="long, about 4.5 minutes, extra verse and bridge">Long (~4.5 min)</option></select></label>
+          <label class="f"><span>Structure <i class="tip" data-tip="Optional. e.g. 'verse-chorus-verse-chorus-bridge-chorus' or 'no chorus, through-composed'.">i</i></span><input type="text" name="structure" placeholder="auto"></label>
+          <label class="f"><span>Extra notes</span><input type="text" name="theme_notes" placeholder="rhyme scheme, words to include, point of view..."></label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <label class="check only-ace" data-tip="Tell the writer explicit language is welcome. ACE-Step has no filter."><input type="checkbox" name="explicit"> Explicit OK</label>
+          <label class="check only-suno" data-tip="Swap words Suno's lyric filter tends to flag (list in data/suno_soften.json). Turn off to keep your words exactly."><input type="checkbox" name="soften" checked> Soften flagged words</label>
+          <span class="spacer"></span>
+          <button class="b" id="w-surprise" data-busy="Thinking..." data-tip="Let the AI invent a song idea.">🎲 Surprise me</button>
+          <button class="b primary" id="w-write" data-busy="Writing...">Write song</button>
+        </div>
+      </div>
+
+      <div class="card" id="w-result" hidden>
+        <div class="row"><h2 style="margin:0">Result</h2><span class="spacer"></span><span class="muted small" id="w-source"></span></div>
+        <div class="notice warn" hidden><b>Suno safety pass changed:</b><ul id="w-changes" style="margin:4px 0 0"></ul></div>
+        <label class="f" style="margin-top:10px"><span>Title</span><input type="text" name="title"></label>
+        <label class="f only-ace" style="margin-top:10px"><span>Caption (sound description) <i class="tip" data-tip="The most important input: genre, mood, instruments, textures, vocal character. No BPM or key here.">i</i></span><textarea name="caption"></textarea></label>
+        <div class="only-suno">
+          <label class="f" style="margin-top:10px"><span>Style of Music <span class="muted" id="w-style-count"></span> <i class="tip" data-tip="Paste into Suno's 'Style of Music' box. Max 1000 characters.">i</i></span><textarea name="style"></textarea></label>
+          <label class="f" style="margin-top:10px"><span>Exclude styles <i class="tip" data-tip="Paste into Suno's 'Exclude styles' box (Advanced options).">i</i></span><input type="text" name="exclude"></label>
+        </div>
+        <div class="grid g4 only-ace" style="margin-top:10px">
+          <label class="f"><span>BPM</span><input type="number" name="bpm" min="30" max="300"></label>
+          <label class="f"><span>Key</span><input type="text" name="keyscale"></label>
+          <label class="f"><span>Time signature</span><select name="timesignature"><option value="">Auto</option><option value="4">4/4</option><option value="3">3/4</option><option value="6">6/8</option><option value="2">2/4</option></select></label>
+          <label class="f"><span>Length (s)</span><input type="number" name="duration" min="10" max="600"></label>
+        </div>
+        <div class="row only-ace" style="margin-top:8px">
+          <label class="f" style="width:140px"><span>Language code</span><input type="text" name="vocal_language" maxlength="7"></label>
+          <label class="check"><input type="checkbox" name="instrumental"> Instrumental</label>
+        </div>
+        <label class="f" style="margin-top:10px"><span>Lyrics <span class="muted" id="w-lyrics-count"></span></span><textarea class="lyrics" name="lyrics"></textarea></label>
+        <p class="muted small" id="w-notes"></p>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="w-instruction" placeholder="Revise: 'make the chorus punchier', 'second verse about winter', 'translate to Spanish'..." style="flex:1">
+          <button class="b" id="w-revise" data-busy="Revising...">Revise</button>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="b primary only-ace" id="w-send" data-tip="Fill the Create tab with this song.">Send to Create →</button>
+          <button class="b only-ace" id="w-to-suno" data-busy="Converting..." data-tip="Rewrite this song so Suno accepts it.">Convert to Suno</button>
+          <button class="b only-suno" id="w-to-ace" data-busy="Converting..." data-tip="Turn this Suno prompt into ACE-Step fields (caption, BPM, key, length).">Convert to ACE-Step</button>
+          <span class="spacer"></span>
+          <span class="only-suno row">
+            <button class="b small" id="w-copy-title">Copy title</button>
+            <button class="b small" id="w-copy-style">Copy style</button>
+            <button class="b small" id="w-copy-exclude">Copy exclude</button>
+            <button class="b small" id="w-copy-lyrics">Copy lyrics</button>
+            <button class="b small" id="w-copy-all">Copy all</button>
+            <a class="b small" href="https://suno.com/create" target="_blank" rel="noopener" data-tip="Opens Suno's create page. Switch to Custom/Advanced, paste each field, press Create." style="text-decoration:none">Open Suno ↗</a>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- CREATE -->
+    <section id="tab-create" class="page">
+      <h1>Create</h1>
+      <p class="lead">Describe the sound, add lyrics, press Generate. Leave BPM, key and length empty to let ACE-Step decide.</p>
+      <div class="card" id="c-form">
+        <label class="f"><span>Title</span><input type="text" name="title" placeholder="Untitled"></label>
+        <label class="f" style="margin-top:10px"><span>Caption <i class="tip" data-tip="Genre, mood, instruments, textures, vocal character. The single biggest factor in what you get. See Guide section 6.">i</i></span>
+          <textarea name="caption" placeholder="dreamy synthwave, warm analog pads, gated reverb drums, breathy female vocal, nostalgic and bittersweet"></textarea></label>
+        <label class="f" style="margin-top:10px"><span>Lyrics <i class="tip" data-tip="Structure tags on their own lines: [Verse 1], [Chorus], [Bridge]... Blank line between sections. See Guide section 7.">i</i></span>
+          <textarea class="lyrics" name="lyrics" placeholder="[Verse 1]&#10;...&#10;&#10;[Chorus]&#10;..."></textarea></label>
+        <div class="row" style="margin-top:6px"><label class="check" data-tip="Ignore the lyrics and make an instrumental."><input type="checkbox" name="instrumental"> Instrumental</label></div>
+
+        <h3>Song details <span class="muted small">(empty = auto)</span></h3>
+        <div class="grid g4">
+          <label class="f"><span>BPM <i class="tip" data-tip="Tempo, 30-300. Slow 60-80, mid 90-120, fast 130-180.">i</i></span><input type="number" name="bpm" min="30" max="300" placeholder="auto"></label>
+          <label class="f"><span>Key <i class="tip" data-tip="e.g. 'A minor', 'F# major'. Common keys (C, G, D, Am, Em) are most stable.">i</i></span><input type="text" name="keyscale" list="keys" placeholder="auto"></label>
+          <label class="f"><span>Time signature</span><select name="timesignature"><option value="">Auto</option><option value="4">4/4</option><option value="3">3/4 (waltz)</option><option value="6">6/8</option><option value="2">2/4</option></select></label>
+          <label class="f"><span>Length (seconds) <i class="tip" data-tip="10-600. A full song with intro and outro is usually 180-240. Too short for the lyrics = rushed singing.">i</i></span><input type="number" name="duration" min="10" max="600" placeholder="auto"></label>
+          <label class="f"><span>Vocal language</span><select name="vocal_language">
+            <option value="">Auto</option><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="ru">Russian</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="zh">Chinese</option><option value="unknown">Other / unknown</option></select></label>
+          <label class="f"><span>Songs per run <i class="tip" data-tip="How many takes to make at once (1-8). Each gets its own seed. More = more VRAM and time.">i</i></span><input type="number" name="batch_size" min="1" max="8" value="2"></label>
+          <label class="f"><span>Seed <i class="tip" data-tip="-1 = random. The same seed with the same settings makes the same song. Every song in the Library remembers its seed.">i</i></span>
+            <div class="row" style="flex-wrap:nowrap"><input type="number" name="seed" value="-1"><button class="b small" type="button" id="c-dice" title="Random">🎲</button></div></label>
+          <label class="f"><span>Format</span><select name="audio_format"><option value="mp3">MP3</option><option value="wav">WAV (16-bit)</option><option value="flac">FLAC</option><option value="wav32">WAV (32-bit float)</option><option value="opus">Opus</option></select></label>
+        </div>
+
+        <h3>LoRA (style add-on)</h3>
+        <div class="grid g3">
+          <label class="f" style="grid-column: span 2"><span>LoRA <i class="tip" data-tip="A trained style add-on. Train your own in the Train tab, or drop downloaded ones in a folder listed in Settings.">i</i></span>
+            <select name="lora" id="c-lora"><option value="">None</option></select></label>
+          <label class="f"><span>Strength <b id="c-lora-scale-v">0.8</b> <i class="tip" data-tip="0 = off, 1 = full. 0.6-0.9 usually keeps vocals clean while getting the style.">i</i></span><input type="range" name="lora_scale" min="0" max="1" step="0.05" value="0.8"></label>
+        </div>
+        <p class="muted small" id="c-lora-hint"></p>
+
+        <details style="margin-top:10px">
+          <summary>Advanced</summary>
+          <div class="grid g4" style="margin-top:10px">
+            <label class="f"><span>Steps <i class="tip" data-tip="Diffusion steps. Turbo: 8 (1-20). Base/SFT: 32-64.">i</i></span><input type="number" name="inference_steps" min="1" max="100" value="8"></label>
+            <label class="f"><span>Guidance <i class="tip" data-tip="How strictly to follow the caption (base/SFT models only; turbo ignores it). Default 7.">i</i></span><input type="number" name="guidance_scale" min="1" max="15" step="0.5" value="7"></label>
+            <label class="f"><span>Shift <i class="tip" data-tip="Noise schedule shift. Leave at 3 for turbo.">i</i></span><input type="number" name="shift" min="1" max="5" step="0.5" value="3"></label>
+            <label class="f"><span>Sampler</span><select name="infer_method"><option value="ode">ODE (deterministic)</option><option value="sde">SDE (more variety)</option></select></label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <label class="check" data-tip="The built-in LM plans the whole song (audio codes) before rendering. Slower, often more coherent structure. For exact same-seed repeats, leave off."><input type="checkbox" name="thinking"> Thinking (LM plans the song)</label>
+            <label class="check" data-tip="Let the LM rewrite your caption. Off keeps your words exactly."><input type="checkbox" name="use_cot_caption"> LM may rewrite caption</label>
+            <label class="check" data-tip="Let the LM detect the vocal language from the lyrics."><input type="checkbox" name="use_cot_language" checked> LM detects language</label>
+          </div>
+          <div class="grid g3" style="margin-top:10px">
+            <label class="f"><span>LM temperature <b data-v="lm_temperature"></b> <i class="tip" data-tip="Creativity of the LM's planning. 0.85 default; higher = wilder.">i</i></span><input type="range" name="lm_temperature" min="0.3" max="1.4" step="0.05" value="0.85"></label>
+            <label class="f"><span>LM guidance <b data-v="lm_cfg_scale"></b></span><input type="range" name="lm_cfg_scale" min="1" max="4" step="0.1" value="2.5"></label>
+            <label class="f"><span>LM top-p <b data-v="lm_top_p"></b></span><input type="range" name="lm_top_p" min="0.5" max="1" step="0.01" value="0.9"></label>
+          </div>
+        </details>
+
+        <div class="row" style="margin-top:14px">
+          <span class="muted small" id="c-ready"></span><span class="spacer"></span>
+          <button class="b" id="c-clear">Clear</button>
+          <button class="b primary" id="c-generate" data-busy="Starting...">Generate</button>
+        </div>
+      </div>
+      <div class="card hidden" id="c-job">
+        <div class="row"><b id="c-stage">Generating</b><span class="spacer"></span><span class="muted small" id="c-elapsed"></span></div>
+        <div class="progress indeterminate" style="margin-top:8px"><i id="c-bar"></i></div>
+      </div>
+      <div class="results" id="c-results"></div>
+      <datalist id="keys"><option>C major</option><option>G major</option><option>D major</option><option>A major</option><option>E major</option><option>F major</option><option>Bb major</option><option>Eb major</option><option>A minor</option><option>E minor</option><option>D minor</option><option>B minor</option><option>F# minor</option><option>C minor</option><option>G minor</option><option>F minor</option></datalist>
+    </section>
+
+    <!-- STUDIO -->
+    <section id="tab-studio" class="page">
+      <h1>Studio</h1>
+      <p class="lead">Refine one song: regenerate it with the same seed, change words, fix how a word is sung, or re-sing just a few seconds.</p>
+      <div class="card">
+        <div class="row">
+          <select id="s-pick" style="flex:1" aria-label="Song"><option value="">Pick a song...</option></select>
+          <button class="b small" id="s-refresh">↻</button>
+        </div>
+      </div>
+      <div id="s-body" class="hidden">
+        <div class="card">
+          <div class="row"><h2 style="margin:0" id="s-title"></h2><span class="spacer"></span><span class="muted small" id="s-meta"></span></div>
+          <audio id="s-audio" controls preload="auto" style="width:100%;margin:10px 0"></audio>
+          <div class="wave" id="s-wave" data-tip="Drag across the waveform to select the part to re-sing. Click to jump."><canvas></canvas><div class="region hidden"></div><div class="playhead"></div></div>
+          <div class="row" style="margin-top:8px">
+            <span class="small">Selection: <b id="s-sel">none</b></span>
+            <button class="b small" id="s-play-sel">▶ Play selection</button>
+            <button class="b small" id="s-clear-sel">Clear</button>
+            <span class="spacer"></span>
+            <span class="muted small" id="s-lineage"></span>
+          </div>
+        </div>
+        <div class="grid g2">
+          <div class="card">
+            <h3>Lyrics</h3>
+            <p class="muted small">Select a word or put the cursor on a line, then use the buttons. Changes apply when you regenerate or re-sing.</p>
+            <div class="toolbar" role="toolbar" aria-label="Delivery tools">
+              <button class="b small" data-op="caps" data-tip="UPPERCASE: sung shouted / with intensity.">CAPS</button>
+              <button class="b small" data-op="paren" data-tip="(parentheses): backing vocal or echo.">( backing )</button>
+              <button class="b small" data-op="stretch" data-tip="Stretch the vowel to hold the note: alive -> aliiive. Use sparingly.">Stretch</button>
+              <button class="b small" data-op="hyphen" data-tip="Split into syllables so each is sung clearly: beautiful -> beau-ti-ful.">Syl-la-bles</button>
+              <button class="b small" data-op="pause" data-tip="Add a breath / pause: ...">Pause …</button>
+              <button class="b small" data-op="lower" data-tip="Back to normal case.">abc</button>
+              <select id="s-tag" aria-label="Insert vocal tag" data-tip="Insert a tag line above the current line to change delivery from there.">
+                <option value="">+ Tag above line</option><option>[whispered]</option><option>[falsetto]</option><option>[powerful belting]</option><option>[raspy vocal]</option><option>[spoken word]</option><option>[harmonies]</option><option>[ad-lib]</option><option>[call and response]</option><option>[low energy]</option><option>[building energy]</option><option>[explosive]</option>
+              </select>
+            </div>
+            <textarea class="lyrics" id="s-lyrics" spellcheck="false"></textarea>
+            <div class="row" style="margin-top:8px">
+              <input type="text" id="s-wish" placeholder="How should the current line sound? e.g. 'say Siobhan correctly', 'stretch the last word', 'sound angrier'" style="flex:1">
+              <button class="b" id="s-suggest" data-busy="Thinking...">Suggest fixes</button>
+            </div>
+            <div id="s-suggestions"></div>
+            <div class="row" style="margin-top:8px">
+              <button class="b small" id="s-line-time" data-tip="Estimate when the line under the cursor is sung and select that span on the waveform. It is an estimate: listen and drag to adjust.">⇢ Select line's time (estimate)</button>
+              <button class="b small" id="s-reset-lyrics">Reset lyrics</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Re-sing a section</h3>
+            <p class="muted small">Regenerates only the selected seconds and keeps the rest of the song exactly as it is. Best for fixing a word or a phrase.</p>
+            <label class="f"><span>Strength <b id="s-strength-v">0.5</b> <i class="tip" data-tip="How much the selected span may change. Low = subtle fix that blends in, high = fully new take of that span.">i</i></span><input type="range" id="s-strength" min="0.1" max="1" step="0.05" value="0.5"></label>
+            <div class="row" style="margin-top:8px">
+              <label class="check" data-tip="Use the song's own seed. Untick for a different take of the same span."><input type="checkbox" id="s-keep-seed" checked> Keep seed</label>
+              <label class="f" style="width:110px"><span>Takes</span><input type="number" id="s-takes" min="1" max="4" value="1"></label>
+              <span class="spacer"></span>
+              <button class="b primary" id="s-repaint" data-busy="Starting...">Re-sing selection</button>
+            </div>
+            <h3>Whole song</h3>
+            <label class="f"><span>Caption</span><textarea id="s-caption"></textarea></label>
+            <div class="row" style="margin-top:10px">
+              <button class="b primary" id="s-same-seed" data-busy="Starting..." data-tip="Make the song again with its exact seed and settings, using the lyrics and caption above. Small word changes keep the same musical idea.">Regenerate (same seed)</button>
+              <button class="b" id="s-variations" data-busy="Starting..." data-tip="Same settings, new seeds: fresh takes on the same song.">Variations ×2</button>
+              <button class="b" id="s-to-create" data-tip="Copy this song's full settings to the Create tab.">Open in Create</button>
+            </div>
+            <div class="card hidden" id="s-job" style="margin-top:12px">
+              <div class="row"><b id="s-stage">Working</b><span class="spacer"></span><span class="muted small" id="s-elapsed"></span></div>
+              <div class="progress indeterminate" style="margin-top:8px"><i></i></div>
+            </div>
+            <div class="results" id="s-results" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIBRARY -->
+    <section id="tab-library" class="page">
+      <h1>Library</h1>
+      <p class="lead">Every song you've made, with the exact settings and seed that made it.</p>
+      <div class="card">
+        <div class="row"><input type="text" id="l-q" placeholder="Search title, caption, lyrics..." style="flex:1"><button class="b" id="l-refresh">↻ Refresh</button></div>
+        <audio id="l-player" controls style="width:100%;margin-top:10px" class="hidden"></audio>
+      </div>
+      <div class="card" style="overflow-x:auto"><table class="list" id="l-table"><thead><tr><th>Title</th><th>Made</th><th>Seed</th><th>Type</th><th>BPM / Key</th><th></th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- TRAIN -->
+    <section id="tab-train" class="page">
+      <h1>Train a LoRA</h1>
+      <p class="lead">Teach ACE-Step a sound from your own tracks. Guide section 11 walks through it.</p>
+      <div class="card">
+        <div class="row">
+          <select id="t-ds" style="flex:1" aria-label="Dataset"><option value="">Pick a dataset...</option></select>
+          <input type="text" id="t-new-name" placeholder="New dataset name" style="width:200px">
+          <input type="text" id="t-new-trigger" placeholder="Trigger word e.g. zxsynth" style="width:200px" data-tip="A made-up word that will switch your style on. Use something that is not a real word.">
+          <button class="b" id="t-create">+ Create</button>
+        </div>
+      </div>
+      <div id="t-body" class="hidden">
+        <div class="card">
+          <h2>1. Audio files</h2>
+          <div class="row">
+            <label class="f" style="width:240px"><span>Trigger word <i class="tip" data-tip="Prepended to every caption during training. Start your captions with it in Create to use the style.">i</i></span><input type="text" id="t-trigger"></label>
+            <span class="spacer"></span>
+            <label class="b" style="cursor:pointer">+ Add files<input type="file" id="t-files" multiple accept=".wav,.mp3,.flac,.ogg,.opus,.m4a" hidden></label>
+            <input type="text" id="t-folder" placeholder="...or import a folder path" style="width:280px">
+            <button class="b" id="t-import">Import</button>
+          </div>
+          <p class="muted small" id="t-count"></p>
+        </div>
+        <div class="card">
+          <h2>2. Describe each track</h2>
+          <div class="row">
+            <button class="b" id="t-autolabel" data-tip="ACE-Step listens to each file and writes caption, BPM, key and time signature. Needs ACE-Step running with its LM.">🤖 Auto-label</button>
+            <label class="check" data-tip="Also transcribe lyrics from the audio (slower; check them after)."><input type="checkbox" id="t-transcribe"> Transcribe lyrics</label>
+            <label class="check" data-tip="Replace fields you have already filled in."><input type="checkbox" id="t-overwrite"> Overwrite existing</label>
+            <span class="muted small" id="t-al-status"></span>
+            <span class="spacer"></span>
+            <button class="b primary" id="t-save">Save changes</button>
+          </div>
+          <div style="overflow-x:auto;margin-top:10px"><table class="list" id="t-samples"><thead><tr><th>File</th><th style="min-width:260px">Caption</th><th>BPM</th><th>Key</th><th>Instr.</th><th>Lyrics</th><th></th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="card">
+          <h2>3. Train</h2>
+          <div class="grid g3">
+            <label class="f"><span>Preset</span><select id="t-preset"></select></label>
+            <label class="f"><span>Run name</span><input type="text" id="t-run" placeholder="auto"></label>
+            <label class="f"><span>Train against <i class="tip" data-tip="The model the LoRA is made for. Use it with the same model in Create. Turbo is fastest; Base is the classic training target.">i</i></span>
+              <select id="t-variant"><option value="">Same as current model</option><option value="turbo">Turbo</option><option value="base">Base</option><option value="sft">SFT</option><option value="xl_turbo">XL Turbo</option><option value="xl_base">XL Base</option></select></label>
+          </div>
+          <p class="muted small" id="t-preset-about"></p>
+          <details><summary>Advanced</summary>
+            <div class="grid g4" style="margin-top:10px">
+              <label class="f"><span>Adapter</span><select id="t-adapter"><option value="lora">LoRA</option><option value="lokr">LoKr</option></select></label>
+              <label class="f"><span>Rank <i class="tip" data-tip="Capacity. 32-64 for a style, 128 for more detail. Higher = bigger file, more risk of overfitting.">i</i></span><input type="number" id="t-rank"></label>
+              <label class="f"><span>Alpha <i class="tip" data-tip="Usually 2x rank.">i</i></span><input type="number" id="t-alpha"></label>
+              <label class="f"><span>Learning rate</span><input type="number" id="t-lr" step="0.00001"></label>
+              <label class="f"><span>Epochs <i class="tip" data-tip="Passes over the dataset. Watch the loss chart: stop when it flattens.">i</i></span><input type="number" id="t-epochs"></label>
+              <label class="f"><span>Save every</span><input type="number" id="t-save-every"></label>
+              <label class="f"><span>Grad. accumulation</span><input type="number" id="t-accum"></label>
+              <label class="f"><span>Max clip length (s)</span><input type="number" id="t-maxdur" value="240"></label>
+            </div>
+            <label class="check" style="margin-top:8px" data-tip="Move the text encoder and VAE to CPU after setup. Saves 2-4 GB VRAM."><input type="checkbox" id="t-offload"> Low-VRAM mode</label>
+          </details>
+          <div class="notice warn small">Training stops ACE-Step while it runs to free the GPU, then restarts it. Close games and other AI apps first.</div>
+          <div class="row">
+            <span class="muted small" id="t-stage"></span><span class="spacer"></span>
+            <button class="b danger" id="t-stop">Stop</button>
+            <button class="b primary" id="t-start" data-busy="Starting...">Start training</button>
+          </div>
+          <div class="grid g4" style="margin-top:10px">
+            <div><div class="muted small">Epoch</div><b id="t-epoch">-</b></div>
+            <div><div class="muted small">Loss</div><b id="t-loss">-</b></div>
+            <div><div class="muted small">Time left</div><b id="t-eta">-</b></div>
+            <div><div class="muted small">Output</div><b id="t-out" class="small">-</b></div>
+          </div>
+          <div class="progress" style="margin-top:10px"><i id="t-bar"></i></div>
+          <canvas class="chart" id="t-chart" style="margin-top:10px" aria-label="Loss chart"></canvas>
+          <details style="margin-top:8px"><summary>Log</summary><div class="log" id="t-log"></div></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="page">
+      <h1>Settings</h1>
+      <div class="card" id="set-ace">
+        <h2>ACE-Step engine</h2>
+        <p class="small" id="set-ace-status"></p>
+        <div class="grid g2">
+          <label class="f"><span>ACE-Step folder <i class="tip" data-tip="Where ACE-Step 1.5 is installed. Leave empty to use the copy the installer put next to this app. Already have ACE-Step? Paste its folder here to reuse it and its models, then Save and Restart.">i</i> <a href="#" id="set-ace-check" class="small">check</a></span><input type="text" name="path" placeholder="(empty = the copy next to this app)"><span class="small" id="set-ace-check-msg"></span></label>
+          <label class="f"><span>API address <i class="tip" data-tip="Where ACE-Step's API listens. Default http://127.0.0.1:8001.">i</i></span><input type="url" name="api_url"></label>
+          <label class="f"><span>Music model (DiT) <i class="tip" data-tip="Turbo is fast and fits 8 GB. XL Turbo sounds best but needs 16-24 GB. Restart ACE-Step after changing.">i</i></span><select name="dit_model" id="set-dit"></select></label>
+          <label class="f"><span>Planner LM <i class="tip" data-tip="The language model that plans songs, fills auto BPM/key, auto-labels training data. Pick by your VRAM.">i</i></span><select name="lm_model" id="set-lm"></select></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="check" data-tip="Load the planner LM. Needed for Thinking, auto metadata and auto-label. Off saves VRAM."><input type="checkbox" name="init_lm"> Load the LM</label>
+          <label class="check" data-tip="Keep the LM on the CPU when idle. Saves VRAM, a bit slower."><input type="checkbox" name="lm_offload_cpu"> Offload LM to CPU</label>
+          <label class="check" data-tip="Start ACE-Step automatically when the Workbench starts."><input type="checkbox" name="autostart"> Start with Workbench</label>
+          <label class="f" style="width:170px"><span>LM backend <i class="tip" data-tip="Auto = 'pt' on Windows (vllm needs Triton there), 'vllm' on Linux (faster).">i</i></span><select name="lm_backend"><option value="">Auto</option><option value="pt">pt (PyTorch)</option><option value="vllm">vllm</option></select></label>
+          <label class="f" style="width:200px"><span>API key (optional)</span><input type="password" name="api_key" autocomplete="off"></label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="b primary" id="set-ace-save">Save</button>
+          <button class="b" id="set-ace-start">Start</button>
+          <button class="b" id="set-ace-restart">Restart</button>
+          <button class="b danger" id="set-ace-stop">Stop</button>
+        </div>
+        <details style="margin-top:10px"><summary>Server log</summary><div class="log" id="set-ace-log"></div></details>
+      </div>
+
+      <div class="card" id="set-llm">
+        <h2>AI writer</h2>
+        <p class="muted small">Writes lyrics, captions, Suno prompts and pronunciation fixes. Guide section 4 explains each option.</p>
+        <div class="grid g2">
+          <label class="f"><span>Provider</span><select name="preset" id="set-preset"></select></label>
+          <label class="f set-url"><span>Server URL (OpenAI-compatible, ends in /v1)</span><input type="url" name="base_url"></label>
+          <label class="f set-model"><span>Model <a href="#" id="set-list-models" class="small">list models</a></span><input type="text" name="model" list="set-models"><datalist id="set-models"></datalist></label>
+          <label class="f set-key"><span>API key <i class="tip" data-tip="Stored only in data/settings.json on this computer. Never shown again in full. Each provider remembers its own key.">i</i> <a href="#" id="set-clear-key" class="small">clear</a></span><input type="password" name="api_key" autocomplete="off"></label>
+          <label class="f set-temp"><span>Temperature <b data-v="temperature"></b> <i class="tip" data-tip="Higher = more surprising lyrics. Ignored by models that don't support it.">i</i></span><input type="range" name="temperature" min="0" max="1.5" step="0.05"></label>
+          <label class="f set-effort"><span>Effort (Claude)</span><select name="effort"><option value="low">Low (fast, cheap)</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+          <label class="f"><span>Max tokens</span><input type="number" name="max_tokens" min="512" max="32000"></label>
+          <label class="f"><span>Timeout (s)</span><input type="number" name="timeout" min="10" max="1800"></label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label class="check set-json" data-tip="Ask the server for strict JSON. Turned off automatically if a server rejects it."><input type="checkbox" name="json_mode"> JSON mode</label>
+          <span class="muted small" id="set-cli"></span>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="b primary" id="set-llm-save">Save</button>
+          <button class="b" id="set-llm-test" data-busy="Testing...">Test</button>
+          <span class="small" id="set-llm-result"></span>
+        </div>
+      </div>
+
+      <div class="card" id="set-train">
+        <h2>Folders</h2>
+        <div class="grid g2">
+          <label class="f"><span>Training datasets</span><input type="text" name="datasets_dir" placeholder="data/datasets"></label>
+          <label class="f"><span>Trained LoRAs</span><input type="text" name="outputs_dir" placeholder="data/loras"></label>
+        </div>
+        <label class="f" style="margin-top:10px"><span>More LoRA folders (one per line) <i class="tip" data-tip="Folders with LoRAs you downloaded or trained elsewhere. Any folder with adapter_config.json shows up in Create.">i</i></span><textarea name="extra_lora_dirs" style="min-height:60px"></textarea></label>
+        <div class="row" style="margin-top:10px"><button class="b primary" id="set-train-save">Save</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Interface</h2>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="set-tips"> Show tooltips</label>
+          <label class="f" style="width:160px"><span>Theme</span><select id="set-theme"><option value="">Match system</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

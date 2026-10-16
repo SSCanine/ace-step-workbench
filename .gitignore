@@ -1,0 +1,9 @@
+# local state: settings (API keys), songs, datasets, LoRAs
+data/
+# environments and the ACE-Step checkout the installer creates
+.venv/
+ACE-Step-1.5/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.log
