@@ -182,7 +182,9 @@ class AceClient:
     # ── high level ──
     def health(self) -> dict:
         try:
-            r = httpx.get(self.base + "/health", timeout=3)
+            # Short connect timeout: Windows takes ~2 s to refuse a closed local port, which made /api/status
+            # too slow for health checks (e.g. Lair's 1.5 s) whenever ACE-Step was stopped.
+            r = httpx.get(self.base + "/health", timeout=httpx.Timeout(3, connect=0.3))
             return self._unwrap(r)
         except Exception:
             return {}
