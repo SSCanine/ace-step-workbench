@@ -1,12 +1,13 @@
 // Library tab: list, search, play, open in Studio, download, delete (moves to data/trash).
 import { $, api, toast, emit, on, showTab, el } from "./core.js";
+import { songForm } from "./create.js";
 
 const player = $("#l-player");
 let timer;
 
 async function load() {
   const { songs } = await api(`/api/songs?q=${encodeURIComponent($("#l-q").value)}`);
-  const kinds = { new: "new", remix: "same seed", variation: "variation", repaint: "re-sung" };
+  const kinds = { new: "new", remix: "same seed", variation: "variation", repaint: "re-sung", import: "imported" };
   const rows = songs.map((s) => el("tr", {},
     el("td", {}, el("b", {}, s.title || "Untitled"), el("div", { class: "muted small" }, (s.caption || "").slice(0, 90))),
     el("td", { class: "small" }, new Date(s.created * 1000).toLocaleString()),
@@ -16,6 +17,10 @@ async function load() {
     el("td", {}, el("div", { class: "row", style: "flex-wrap:nowrap" },
       el("button", { class: "b small", title: "Play", onclick: () => { player.classList.remove("hidden"); player.src = `/api/songs/${s.id}/audio`; player.play(); } }, "▶"),
       el("button", { class: "b small", onclick: () => { emit("open-studio", s.id); showTab("studio"); } }, "Studio"),
+      el("button", { class: "b small", title: "Load its exact settings and seed into Create", onclick: async () => {
+        emit("load-create", songForm(await api(`/api/songs/${s.id}`)));
+        showTab("create");
+      } }, "↺ Create"),
       el("a", { class: "b small", href: `/api/songs/${s.id}/audio?download=1`, style: "text-decoration:none" }, "⬇"),
       el("button", { class: "b small danger", title: "Move to trash (data/trash)", onclick: async () => {
         if (!confirm(`Move "${s.title || "Untitled"}" to the trash folder?`)) return;

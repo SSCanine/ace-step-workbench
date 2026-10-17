@@ -180,11 +180,11 @@ class AceClient:
             raise AceError(f"Cannot reach ACE-Step at {self.base} ({e.__class__.__name__}).") from e
 
     # ── high level ──
-    def health(self) -> dict:
+    def health(self, timeout: float = 3) -> dict:
         try:
             # Short connect timeout: Windows takes ~2 s to refuse a closed local port, which made /api/status
             # too slow for health checks (e.g. Lair's 1.5 s) whenever ACE-Step was stopped.
-            r = httpx.get(self.base + "/health", timeout=httpx.Timeout(3, connect=0.3))
+            r = httpx.get(self.base + "/health", timeout=httpx.Timeout(timeout, connect=0.3))
             return self._unwrap(r)
         except Exception:
             return {}

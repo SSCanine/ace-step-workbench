@@ -1,6 +1,6 @@
 // Studio tab: same-seed regenerate, lyric delivery tools, re-sing a selected span (repaint).
 import { $, api, busy, toast, emit, on, showTab, el, fmtTime } from "./core.js";
-import { followJob } from "./create.js";
+import { followJob, loadLoras, hasLora, withTrigger, songForm } from "./create.js";
 
 let song = null;
 let peaks = null;
@@ -31,6 +31,9 @@ async function open(id) {
   $("#s-lineage").textContent = song.parent ? `made from ${song.parent}` : "";
   lyr.value = song.lyrics || "";
   $("#s-caption").value = song.caption || "";
+  if (song.lora && !hasLora(song.lora)) await loadLoras();
+  setLora(song.lora || "", song.lora_scale ?? 0.8);
+  emit("draft-changed");
   $("#s-suggestions").replaceChildren();
   $("#s-results").replaceChildren();
   setSel(null);
@@ -44,6 +47,27 @@ async function open(id) {
     peaks = computePeaks(data, 1200);
   } catch { peaks = null; }
   drawWave(peaks);
+}
+
+function setLora(path, scale) {
+  $("#s-lora").value = path;
+  $("#s-lora-scale").value = scale;
+  $("#s-lora-scale-v").textContent = $("#s-lora-scale").value;
+}
+
+// Autosave (draft.js): which song is open and the unsaved edits to it.
+export function draftState() {
+  if (!song) return null;
+  return { song: song.id, lyrics: lyr.value, caption: $("#s-caption").value,
+           lora: $("#s-lora").value, lora_scale: Number($("#s-lora-scale").value) };
+}
+
+export async function restoreDraft(d) {
+  await loadPicker();
+  await open(d.song);
+  lyr.value = d.lyrics ?? lyr.value;
+  $("#s-caption").value = d.caption ?? $("#s-caption").value;
+  setLora(d.lora ?? $("#s-lora").value, d.lora_scale ?? $("#s-lora-scale").value);
 }
 
 function computePeaks(buf, n) {
@@ -234,7 +258,11 @@ export function init() {
         } }, "Use this")))));
   }));
 
-  const edits = () => ({ lyrics: lyr.value, caption: $("#s-caption").value });
+  $("#s-lora-scale").addEventListener("input", (e) => { $("#s-lora-scale-v").textContent = e.target.value; });
+  const edits = () => {
+    const lora = $("#s-lora").value;
+    return { lyrics: lyr.value, caption: withTrigger($("#s-caption").value, lora), lora, lora_scale: Number($("#s-lora-scale").value) };
+  };
   $("#s-same-seed").addEventListener("click", (e) => busy(e.currentTarget, async () => {
     const { job } = await api(`/api/songs/${song.id}/remix`, { method: "POST", body: { mode: "same_seed", form: edits() } });
     followJob(job, jobUi());
@@ -252,12 +280,11 @@ export function init() {
     followJob(job, jobUi());
   }));
   $("#s-to-create").addEventListener("click", () => {
-    const f = song.form || {};
-    emit("load-create", { ...f, title: song.title, caption: $("#s-caption").value, lyrics: lyr.value, seed: song.seed, batch_size: 1, lora: song.lora || "", lora_scale: song.lora_scale });
+    emit("load-create", { ...songForm(song), ...edits() });
     showTab("create");
   });
 
   on("open-studio", (id) => { loadPicker().then(() => open(id)); });
-  on("tab", (t) => { if (t === "studio") { loadPicker(); if (song) drawWave(peaks); } });
+  on("tab", (t) => { if (t === "studio") { loadPicker(); loadLoras(); if (song) drawWave(peaks); } });
   on("library-changed", loadPicker);
 }

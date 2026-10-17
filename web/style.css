@@ -97,6 +97,13 @@ body.no-tips [data-tip]::after, body.no-tips .tip { display: none !important; }
 .mono { font-family: var(--mono); }
 .hidden { display: none !important; }
 
+/* song drop box + Generate bar that stays in reach */
+.drop { border: 1.5px dashed var(--line); border-radius: var(--radius); background: var(--panel); padding: 14px 16px; margin-bottom: 14px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.drop:hover, .drop:focus-visible { border-color: var(--accent); outline: none; }
+body.dragging .drop { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.drop.busy { opacity: .6; pointer-events: none; }
+.actions { position: sticky; bottom: 0; z-index: 5; margin: 14px -16px -16px; padding: 12px 16px; background: var(--panel); border-top: 1px solid var(--line); border-radius: 0 0 var(--radius) var(--radius); }
+
 /* results */
 .results { display: grid; gap: 12px; }
 .song { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }

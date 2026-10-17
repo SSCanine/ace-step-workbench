@@ -8,12 +8,30 @@ export async function loadLoras() {
   try {
     loras = (await api("/api/loras")).loras;
   } catch { loras = []; }
-  const sel = $("#c-lora");
-  const cur = sel.value;
-  sel.replaceChildren(el("option", { value: "" }, "None"),
-    ...loras.map((l) => el("option", { value: l.path }, l.label + (l.trigger ? `  [${l.trigger}]` : ""))));
-  sel.value = cur;
+  for (const sel of [$("#c-lora"), $("#s-lora")]) {  // Create and Studio share the list
+    const cur = sel.value;
+    sel.replaceChildren(el("option", { value: "" }, "None"),
+      ...loras.map((l) => el("option", { value: l.path }, l.label + (l.trigger ? `  [${l.trigger}]` : ""))));
+    sel.value = cur;
+  }
   loraHint();
+}
+
+export const hasLora = (path) => loras.some((l) => l.path === path);
+
+// A LoRA trained here has a trigger word; put it at the start of the caption if it's missing.
+export function withTrigger(caption, path) {
+  const l = loras.find((x) => x.path === path);
+  return l && l.trigger && !caption.toLowerCase().includes(l.trigger.toLowerCase()) ? `${l.trigger}, ${caption}` : caption;
+}
+
+// A saved song's full settings for the Create form: same seed + same settings = the same song.
+export function songForm(song) {
+  const f = song.form || {};
+  return {
+    ...f, title: song.title, caption: f.caption ?? song.caption ?? "", lyrics: f.lyrics ?? song.lyrics ?? "",
+    seed: song.seed, batch_size: 1, lora: song.lora || "", lora_scale: song.lora_scale ?? f.lora_scale,
+  };
 }
 
 function loraHint() {
@@ -35,10 +53,7 @@ function liveValues(root) {
 
 export function collect() {
   const f = readForm(form);
-  const l = loras.find((x) => x.path === f.lora);
-  if (l && l.trigger && !f.caption.toLowerCase().includes(l.trigger.toLowerCase())) {
-    f.caption = `${l.trigger}, ${f.caption}`;
-  }
+  f.caption = withTrigger(f.caption, f.lora);
   return f;
 }
 
@@ -67,7 +82,7 @@ export async function followJob(jobId, ui) {
 
 export async function songCard(id) {
   const m = await api(`/api/songs/${id}`);
-  const kind = { new: "", remix: "same-seed remix", variation: "variation", repaint: "re-sung section" }[m.kind] || m.kind;
+  const kind = { new: "", remix: "same-seed remix", variation: "variation", repaint: "re-sung section", import: "imported" }[m.kind] || m.kind;
   return el("div", { class: "song" },
     el("div", { class: "row" },
       el("b", {}, m.title || "Untitled"),
@@ -76,14 +91,15 @@ export async function songCard(id) {
       el("span", { class: "meta" }, `seed ${m.seed} · ${m.bpm ?? "?"} BPM · ${m.keyscale || "?"} · ${fmtTime(Number(m.duration))}`)),
     el("audio", { controls: true, preload: "none", src: `/api/songs/${id}/audio` }),
     el("div", { class: "row" },
-      el("button", { class: "b small", onclick: () => { emit("open-studio", id); showTab("studio"); } }, "🎚️ Studio"),
-      el("button", { class: "b small", onclick: () => { emit("open-studio", id); showTab("studio"); } , "data-tip": "Open in Studio to regenerate with this seed, change words or re-sing a part." }, "Same seed…"),
+      el("button", { class: "b small", onclick: () => { emit("open-studio", id); showTab("studio"); }, "data-tip": "Regenerate with this seed, change words, switch LoRA or re-sing a part." }, "🎚️ Studio"),
+      el("button", { class: "b small", onclick: () => { emit("load-create", songForm(m)); showTab("create"); }, "data-tip": "Put this song's exact settings and seed back in the Create form." }, "↺ Load settings"),
       el("a", { class: "b small", href: `/api/songs/${id}/audio?download=1`, style: "text-decoration:none" }, "⬇ Download")));
 }
 
 export function init() {
   liveValues(form);
   $("#c-lora").addEventListener("change", loraHint);
+  $("#c-lora").addEventListener("input", loraHint);
   $("#c-dice").addEventListener("click", () => { $('[name="seed"]', form).value = Math.floor(Math.random() * 2147483647); });
   $("#c-clear").addEventListener("click", () => {
     fillForm(form, { title: "", caption: "", lyrics: "", bpm: "", keyscale: "", timesignature: "", duration: "", vocal_language: "", instrumental: false, seed: -1 });
@@ -97,7 +113,8 @@ export function init() {
 
   // Accepts a Write bundle or a saved song's full form: every key that matches a Create field is filled
   // (steps, sampler, thinking, LM settings, format...), so a seed reproduces exactly.
-  on("load-create", (b) => {
+  on("load-create", async (b) => {
+    if (b.lora && !hasLora(b.lora)) await loadLoras();  // a LoRA folder added since the page loaded
     const data = { ...b, caption: b.caption || b.style || "", instrumental: !!b.instrumental };
     for (const k of ["bpm", "keyscale", "timesignature", "duration", "vocal_language"]) data[k] = b[k] ?? "";
     if (b.seed == null) delete data.seed;

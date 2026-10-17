@@ -113,7 +113,12 @@
     <!-- CREATE -->
     <section id="tab-create" class="page">
       <h1>Create</h1>
-      <p class="lead">Describe the sound, add lyrics, press Generate. Leave BPM, key and length empty to let ACE-Step decide.</p>
+      <p class="lead">Describe the sound, add lyrics, press Generate. Leave BPM, key and length empty to let ACE-Step decide. Everything you type is saved as you go.</p>
+      <div class="drop" id="c-drop" role="button" tabindex="0" data-tip="Songs made in the Workbench or in ACE-Step's own UI. If the song was moved out of ACE-Step's output folder, drop the .json saved next to it too.">
+        <b>Drop a song here</b> to load its caption, lyrics, LoRA and settings <span class="muted">· or click to pick a file</span>
+        <input type="file" id="c-drop-file" accept="audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.json" multiple hidden>
+      </div>
+      <div class="notice hidden" id="c-import-note"></div>
       <div class="card" id="c-form">
         <label class="f"><span>Title</span><input type="text" name="title" placeholder="Untitled"></label>
         <label class="f" style="margin-top:10px"><span>Caption <i class="tip" data-tip="Genre, mood, instruments, textures, vocal character. The single biggest factor in what you get. See Guide section 6.">i</i></span>
@@ -164,7 +169,7 @@
           </div>
         </details>
 
-        <div class="row" style="margin-top:14px">
+        <div class="row actions">
           <span class="muted small" id="c-ready"></span><span class="spacer"></span>
           <button class="b" id="c-clear">Clear</button>
           <button class="b primary" id="c-generate" data-busy="Starting...">Generate</button>
@@ -187,6 +192,7 @@
           <select id="s-pick" style="flex:1" aria-label="Song"><option value="">Pick a song...</option></select>
           <button class="b small" id="s-refresh">↻</button>
         </div>
+        <p class="muted small" style="margin:8px 0 0">Or drop a song file anywhere on this page to open it here.</p>
       </div>
       <div id="s-body" class="hidden">
         <div class="card">
@@ -199,6 +205,11 @@
             <button class="b small" id="s-clear-sel">Clear</button>
             <span class="spacer"></span>
             <span class="muted small" id="s-lineage"></span>
+          </div>
+          <div class="grid g3" style="margin-top:12px">
+            <label class="f" style="grid-column: span 2"><span>LoRA for new takes <i class="tip" data-tip="Used by Regenerate, Variations and Re-sing. Starts as the LoRA this song was made with. Switching LoRA restarts ACE-Step once.">i</i></span>
+              <select id="s-lora"><option value="">None</option></select></label>
+            <label class="f"><span>Strength <b id="s-lora-scale-v">0.8</b></span><input type="range" id="s-lora-scale" min="0" max="1" step="0.05" value="0.8"></label>
           </div>
         </div>
         <div class="grid g2">

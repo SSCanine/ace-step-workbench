@@ -34,7 +34,7 @@
       <tr><th>Tab</th><th>What it is for</th></tr>
       <tr><td>Guide</td><td>This page.</td></tr>
       <tr><td>Write</td><td>AI songwriter: idea in, title + caption/style + lyrics + tempo/key out. Target ACE-Step (unfiltered) or Suno (safe).</td></tr>
-      <tr><td>Create</td><td>The generator: caption, lyrics, BPM, key, length, seed, LoRA. Results play right there.</td></tr>
+      <tr><td>Create</td><td>The generator: caption, lyrics, BPM, key, length, seed, LoRA. Results play right there. Drop a song file on it to load the exact settings that made it.</td></tr>
       <tr><td>Studio</td><td>Open one song: re-generate it with the same seed, edit lyrics line by line, fix how words are sung, re-sing a section.</td></tr>
       <tr><td>Library</td><td>Every song you have made, with its exact settings, searchable.</td></tr>
       <tr><td>Train</td><td>Build a dataset from your own tracks and train a LoRA (a small add-on that teaches ACE-Step a style or voice).</td></tr>
@@ -153,6 +153,15 @@ Hold the line... hold the line
       <li><b>Re-sing a section</b> (repaint). Drag across the waveform to select a few seconds (or pick a lyric line and press <b>Select line's time</b> for an estimate), edit the words for that part, press <b>Re-sing selection</b>. Only that span is regenerated; the rest of the song stays exactly as it was. Best for fixing one word or phrase.</li>
       <li><b>Variations.</b> Keep everything and change only the seed for a fresh take on the same song.</li>
     </ol>
+    <p><b>LoRA for new takes</b> starts as the LoRA the song was made with. Pick another one (or None, or a different strength) and Regenerate, Variations and Re-sing use it.</p>
+    <h3>Bringing a song back</h3>
+    <p>Drop a song file anywhere in the app (or click the drop box on Create). Its caption, lyrics, seed, LoRA and settings load into Create, and on the Studio tab it opens in Studio. It works with:</p>
+    <ul>
+      <li><b>Workbench downloads</b> (the ⬇ buttons): MP3, WAV and FLAC downloads carry their settings inside the file.</li>
+      <li><b>Songs from ACE-Step's own UI</b>: it saves a .json next to every song. Drop the song alone while it is still in ACE-Step's output folder, or drop the song and its .json together if you moved it.</li>
+      <li><b>Any copy of a song already in your Library</b>, recognised by its audio.</li>
+    </ul>
+    <p>LoRAs are recognised by their weights, so the right one is picked even if it was renamed. Dropped songs are added to the Library so Studio can re-sing them. Everything you type is saved as you go and comes back when the page reopens.</p>
     <div class="notice">Tip: when a single word is mispronounced, combine both tools: respell the word (section 8), then re-sing only that line's few seconds.</div>
 
     <h2 id="g-lora">11. Training a LoRA</h2>

@@ -6,6 +6,8 @@ import * as studio from "./studio.js";
 import * as library from "./library.js";
 import * as train from "./train.js";
 import * as settings from "./settings.js";
+import * as draft from "./draft.js";
+import * as dropzone from "./dropzone.js";
 
 function applyTheme(t) {
   try { localStorage.setItem("wb.theme", t); } catch {}
@@ -67,13 +69,16 @@ async function boot() {
     if (a) { e.preventDefault(); showTab(a.dataset.goto); }
   });
 
-  write.init(); create.init(); studio.init(); library.init(); settings.init();
+  write.init(); create.init(); studio.init(); library.init(); settings.init(); dropzone.init();
   try { await train.init(); } catch (e) { console.error("Train tab failed to load", e); }
   try { await loadGuide(); } catch (e) { $("#guide-body").textContent = "Could not load the guide."; }
 
   let first = "guide";
   try { first = localStorage.getItem("wb.tab") || (localStorage.getItem("wb.seen") ? "write" : "guide"); localStorage.setItem("wb.seen", "1"); } catch {}
-  showTab(first);
+  let restored = "";
+  try { restored = await draft.restore(); } catch (e) { console.error("Could not restore the last session", e); }
+  showTab(restored || first);
+  draft.start();
   pollStatus();
   setInterval(pollStatus, 3000);
 }

@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import contextlib
+import json
+import mimetypes
+import os
 import threading
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ace, config, gen, library, llm, suno, training, writer
+from . import ace, config, gen, importer, library, llm, songmeta, suno, training, writer
 
 WEB = config.ROOT / "web"
 AUTOSTART_OVERRIDE: bool | None = None
@@ -103,7 +107,7 @@ def index():
 @app.get("/api/status")
 def status():
     s = config.load()
-    h = ace.AceClient(s).health()
+    h = ace.AceClient(s).health(timeout=1)  # status must stay fast even while ACE-Step is busy generating
     return {
         "ace": {
             "installed": ace.is_installed(config.ace_dir(s)), "path": str(config.ace_dir(s)),
@@ -365,7 +369,50 @@ def song_audio(song_id: str, download: int = 0):
         return FileResponse(p)
     meta = library.get(song_id)
     safe = "".join(c for c in (meta.get("title") or "song") if c.isalnum() or c in " -_").strip() or "song"
-    return FileResponse(p, filename=f"{safe} ({meta.get('seed')}){p.suffix}")
+    name = f"{safe} ({meta.get('seed')}){p.suffix}"
+    # The download carries its settings, so dropping it back in (Create or Studio) restores them.
+    data = songmeta.embed(p.read_bytes(), importer.export_meta(config.load(), meta))
+    return Response(data, media_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                    headers={"Content-Disposition": f"attachment; filename*=utf-8''{quote(name)}"})
+
+
+@app.post("/api/import")
+async def import_song(files: list[UploadFile] = File(...)):
+    """Dropped song file(s) -> the settings that made them (+ a Library entry so Studio can use it)."""
+    items, total = [], 0
+    for f in files[:8]:
+        data = await f.read()
+        total += len(data)
+        if total > 400 * 2**20:
+            raise ValueError("Too large to import (400 MB max).")
+        items.append((Path(f.filename or "song").name, data))
+    return importer.import_files(config.load(), items)
+
+
+# ── autosave ──────────────────────────────────────────────────────────
+# Everything typed in the app is saved here as you go, so a reload never loses work.
+
+@app.get("/api/draft")
+def draft_get():
+    try:
+        return {"draft": json.loads((config.DATA / "draft.json").read_text(encoding="utf-8"))}
+    except (OSError, ValueError):
+        return {"draft": None}
+
+
+@app.put("/api/draft")
+async def draft_put(req: Request):
+    raw = await req.body()
+    if len(raw) > 4 * 2**20:
+        raise ValueError("Draft too large to save.")
+    draft = json.loads(raw)
+    if not isinstance(draft, dict):
+        raise ValueError("Draft must be an object.")
+    config.DATA.mkdir(parents=True, exist_ok=True)
+    tmp = config.DATA / "draft.tmp"
+    tmp.write_text(json.dumps(draft, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, config.DATA / "draft.json")
+    return {"ok": True}
 
 
 @app.get("/api/loras")
