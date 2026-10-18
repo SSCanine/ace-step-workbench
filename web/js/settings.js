@@ -25,6 +25,8 @@ async function load() {
   fillForm($("#set-llm"), s.llm);
   showProviderFields(s.llm.preset);
   fillForm($("#set-train"), { ...s.training, extra_lora_dirs: (s.training.extra_lora_dirs || []).join("\n") });
+  const gate = s.training.gate || {};
+  fillForm($("#set-gate"), { ...gate, comfy_urls: (gate.comfy_urls || []).join("\n") });
   const cli = [];
   cli.push(r.cli.claude ? "Claude Code CLI found" : "Claude Code CLI not installed");
   cli.push(r.cli.codex ? "Codex CLI found" : "Codex CLI not installed");
@@ -122,6 +124,12 @@ export function init() {
     const f = readForm($("#set-train"));
     f.extra_lora_dirs = f.extra_lora_dirs.split("\n").map((x) => x.trim()).filter(Boolean);
     await api("/api/settings", { method: "POST", body: { training: f } });
+    toast("Saved");
+  }));
+  $("#set-gate-save").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const f = readForm($("#set-gate"));
+    f.comfy_urls = f.comfy_urls.split("\n").map((x) => x.trim()).filter(Boolean);
+    await api("/api/settings", { method: "POST", body: { training: { gate: f } } });
     toast("Saved");
   }));
   $("#set-tips").addEventListener("change", async (e) => {

@@ -11,7 +11,7 @@ export async function loadLoras() {
   for (const sel of [$("#c-lora"), $("#s-lora")]) {  // Create and Studio share the list
     const cur = sel.value;
     sel.replaceChildren(el("option", { value: "" }, "None"),
-      ...loras.map((l) => el("option", { value: l.path }, l.label + (l.trigger ? `  [${l.trigger}]` : ""))));
+      ...loras.map((l) => el("option", { value: l.path }, l.label + (l.trigger ? `  [${l.trigger}]` : "") + (l.model_label ? `  · ${l.model_label}` : ""))));
     sel.value = cur;
   }
   loraHint();
@@ -34,11 +34,15 @@ export function songForm(song) {
   };
 }
 
+let currentModel = "";  // the DiT model ACE-Step runs (from /api/status)
+
 function loraHint() {
   const l = loras.find((x) => x.path === $("#c-lora").value);
+  const other = l && l.model_id && currentModel && l.model_id !== currentModel;
   $("#c-lora-hint").textContent = l
     ? (l.trigger ? `Trigger word: "${l.trigger}" (added to the start of your caption automatically).` : "") +
-      (l.model ? ` Trained for: ${l.model}.` : "")
+      (l.model_label ? ` Made for ${l.model_label}.` : "") +
+      (other ? ` Generating switches ACE-Step to ${l.model_label} first (one restart).` : "")
     : "";
 }
 
@@ -82,7 +86,7 @@ export async function followJob(jobId, ui) {
 
 export async function songCard(id) {
   const m = await api(`/api/songs/${id}`);
-  const kind = { new: "", remix: "same-seed remix", variation: "variation", repaint: "re-sung section", import: "imported" }[m.kind] || m.kind;
+  const kind = { new: "", remix: "same-seed remix", variation: "variation", repaint: "re-sung section", import: "imported", test: "LoRA test clip" }[m.kind] || m.kind;
   return el("div", { class: "song" },
     el("div", { class: "row" },
       el("b", {}, m.title || "Untitled"),
@@ -125,6 +129,7 @@ export function init() {
   });
   on("tab", (t) => { if (t === "create") loadLoras(); });
   on("status", (s) => {
+    if (s.ace.model && s.ace.model !== currentModel) { currentModel = s.ace.model; loraHint(); }
     $("#c-ready").textContent = !s.ace.reachable ? "ACE-Step is not running (Settings)." : !s.ace.ready ? "ACE-Step is loading models..." : "";
   });
   loadLoras();

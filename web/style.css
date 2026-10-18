@@ -150,6 +150,8 @@ body.dragging .drop { border-color: var(--accent); background: color-mix(in srgb
 .toast.bad { background: #5a1f24; }
 table.list { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.list td, table.list th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+table.list .good { color: var(--good); } table.list .bad { color: var(--bad); }
+table.list td { vertical-align: top; }
 
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }

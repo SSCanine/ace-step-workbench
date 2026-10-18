@@ -44,6 +44,23 @@ VARIANT_FOR_MODEL = {
     "acestep-v15-turbo": "turbo", "acestep-v15-base": "base", "acestep-v15-sft": "sft",
     "acestep-v15-xl-turbo": "xl_turbo", "acestep-v15-xl-base": "xl_base", "acestep-v15-xl-sft": "xl_sft",
 }
+MODEL_FOR_VARIANT = {v: m for m, v in VARIANT_FOR_MODEL.items()}
+VARIANT_LABEL = {"xl_turbo": "XL Turbo", "turbo": "Turbo", "xl_base": "XL Base", "base": "Base", "xl_sft": "XL SFT", "sft": "SFT"}
+# Free GPU memory a LoRA run needs (gradient checkpointing is on). The XL figure is an estimate.
+VRAM_NEED_GB = {"turbo": 9, "base": 9, "sft": 9, "xl_turbo": 16, "xl_base": 16, "xl_sft": 16}
+
+
+def norm_variant(v) -> str:
+    """'xl-turbo' (Side-Step) and 'xl_turbo' (ACE-Step) are the same variant."""
+    v = str(v or "").strip().lower().replace("-", "_")
+    return v if v in VARIANT_LABEL else ""
+
+
+def model_variants(settings: dict) -> list[dict]:
+    """Every model a LoRA can be trained for, and whether its checkpoint is downloaded."""
+    ckpt = config.ace_dir(settings) / "checkpoints"
+    return [{"variant": v, "label": label, "model": MODEL_FOR_VARIANT[v], "installed": (ckpt / MODEL_FOR_VARIANT[v]).is_dir()}
+            for v, label in VARIANT_LABEL.items()]
 
 STEP_RE = re.compile(r"Epoch\s+(\d+)\s*/\s*(\d+),\s*Step\s+(\d+),\s*Loss:\s*([\d.eE+-]+)")
 EPOCH_RE = re.compile(r"\[OK\]\s*Epoch\s+(\d+)\s*/\s*(\d+)\s+in\s+([\d.]+)s,\s*Loss:\s*([\d.eE+-]+)")
@@ -183,6 +200,56 @@ def import_folder(settings: dict, name: str, folder: str) -> int:
     return n
 
 
+def _flag(v) -> bool:
+    return v if isinstance(v, bool) else str(v).strip().lower() in ("true", "1", "yes")
+
+
+def _int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def import_dataset(settings: dict, folder: str, name: str = "") -> dict:
+    """Bring in a dataset labeled elsewhere (ACE-Step's format: a folder with dataset.json and the songs).
+    Songs are copied; captions, lyrics, BPM and key come along, so nothing needs labeling again."""
+    src = Path(folder).expanduser()
+    if not (src / "dataset.json").is_file():
+        raise ValueError(f"No dataset.json in {src}. Pick a folder made by ACE-Step's dataset builder (or the Workbench).")
+    srcds = _read_json(src / "dataset.json")
+    meta = srcds.get("metadata") or {}
+    name = _check_name(name or meta.get("name") or src.name)
+    create_dataset(settings, name, meta.get("custom_tag", ""))
+    d = ds_dir(settings, name)
+    by_name, n = {}, 0
+    for s in srcds.get("samples", []):
+        fn = Path(s.get("filename") or s.get("audio_path") or "").name
+        p = next((c for c in (Path(s.get("audio_path") or ""), src / fn) if c.name and c.is_file()), None)
+        if p is None or p.suffix.lower() not in AUDIO_EXT:
+            continue
+        if not (d / "audio" / p.name).exists():
+            shutil.copy2(p, d / "audio" / p.name)
+        by_name[p.name] = s
+        n += 1
+    ds = load_dataset(settings, name)
+    for s in ds["samples"]:
+        o = by_name.get(s["filename"])
+        if not o:
+            continue
+        for k in ("caption", "genre", "lyrics", "raw_lyrics", "keyscale", "language"):
+            if o.get(k) not in (None, "None"):
+                s[k] = str(o[k])
+        s["timesignature"] = str(o.get("timesignature") or "")
+        s["bpm"], s["duration"] = _int(o.get("bpm")), _int(o.get("duration")) or 0
+        s["is_instrumental"] = _flag(o.get("is_instrumental"))
+    for k in ("all_instrumental", "genre_ratio"):
+        if k in meta:
+            ds["metadata"][k] = _flag(meta[k]) if k == "all_instrumental" else meta[k]
+    save_dataset(settings, name, ds)
+    return {"name": name, "added": n}
+
+
 def remove_file(settings: dict, name: str, filename: str) -> None:
     d = ds_dir(settings, name)
     p = d / "audio" / Path(filename).name
@@ -260,23 +327,39 @@ def find_adapters(settings: dict) -> list[dict]:
     return uniq
 
 
-def _adapter_entry(root: Path, folder: Path) -> dict:
-    run = None
-    for p in [folder, *folder.parents]:
+def _read_json(p: Path) -> dict:
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def adapter_lineage(folder: Path, root: Path | None = None) -> tuple[str, str]:
+    """(model variant, trigger word) of an adapter folder, from the files its trainer left next to it:
+    run.json (Workbench), training_config.json (ACE-Step / Side-Step), style_card.json (trigger)."""
+    variant, trigger = "", ""
+    for i, p in enumerate([folder, *folder.parents]):
         if (p / "run.json").is_file():
-            try:
-                run = json.loads((p / "run.json").read_text(encoding="utf-8"))
-            except Exception:
-                run = None
+            run = _read_json(p / "run.json")
+            return norm_variant(run.get("model_variant")), run.get("trigger", "")
+        if not variant and (p / "training_config.json").is_file():
+            variant = norm_variant(_read_json(p / "training_config.json").get("model_variant"))
+        if not trigger and (p / "style_card.json").is_file():
+            trigger = _read_json(p / "style_card.json").get("trigger", "")
+        if p == root or i >= 3 or (variant and trigger):
             break
-        if p == root:
-            break
+    return variant, trigger
+
+
+def _adapter_entry(root: Path, folder: Path) -> dict:
+    variant, trigger = adapter_lineage(folder, root)
     try:
         label = str(folder.relative_to(root)).replace("\\", "/")
     except ValueError:
         label = folder.name
-    return {"path": str(folder.resolve()), "label": label, "trigger": (run or {}).get("trigger", ""),
-            "model": (run or {}).get("model_variant", "")}
+    return {"path": str(folder.resolve()), "label": label, "trigger": trigger, "model": variant,
+            "model_label": VARIANT_LABEL.get(variant, ""), "model_id": MODEL_FOR_VARIANT.get(variant, "")}
 
 
 # ── training job ──────────────────────────────────────────────────────
@@ -290,6 +373,7 @@ class Trainer:
         self.state: dict = {"status": "idle"}
         self.log: list[str] = []
         self._stop = False
+        self.before_train = None  # optional callback(variant), run once the GPU is ours (the queue waits for free VRAM)
 
     def _sink(self, line: str) -> None:
         line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", line)
@@ -311,6 +395,16 @@ class Trainer:
         return {**self.state, "log": self.log[-tail:]}
 
     def start(self, settings: dict, name: str, opts: dict) -> None:
+        ds, run_name = self._prepare(settings, name, opts)
+        threading.Thread(target=self._run, args=(settings, name, ds, run_name, opts), daemon=True).start()
+
+    def run(self, settings: dict, name: str, opts: dict) -> dict:
+        """Train and wait for the result (the queue's way in). Returns the final state."""
+        ds, run_name = self._prepare(settings, name, opts)
+        self._run(settings, name, ds, run_name, opts)
+        return dict(self.state)
+
+    def _prepare(self, settings: dict, name: str, opts: dict) -> tuple[dict, str]:
         if self.state.get("status") in ("preparing", "preprocessing", "training"):
             raise RuntimeError("A training run is already in progress.")
         ace_dir = config.ace_dir(settings)
@@ -331,7 +425,7 @@ class Trainer:
         self.state = {"status": "preparing", "stage": "Preparing", "dataset": name, "run": run_name, "epoch": 0,
                       "epochs": int(opts.get("epochs") or 0), "loss": None, "epoch_losses": [], "error": "",
                       "started": time.time()}
-        threading.Thread(target=self._run, args=(settings, name, ds, run_name, opts), daemon=True).start()
+        return ds, run_name
 
     def stop(self) -> None:
         self._stop = True
@@ -366,6 +460,8 @@ class Trainer:
                     time.sleep(2)
                 if self._stop:
                     raise RuntimeError("Stopped.")
+                if self.before_train:
+                    self.before_train(variant)
                 # preprocess (skipped when the dataset has not changed since last time)
                 h = _ds_hash(ds) + variant
                 stamp = tensors / ".workbench_hash"
@@ -417,7 +513,8 @@ class Trainer:
             self.state.update(status="stopped" if self._stop else "error", stage="Stopped" if self._stop else "Failed", error=str(e))
         finally:
             self.state["finished"] = time.time()
-            if was_running and not self.server.managed:
+            # The queue restarts ACE-Step itself once all its jobs are done.
+            if was_running and not self.server.managed and opts.get("restart_after", True):
                 try:
                     self.on_server_restart()
                     self.server.start(settings)

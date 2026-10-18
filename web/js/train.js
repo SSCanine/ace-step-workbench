@@ -1,9 +1,10 @@
-// Train tab: datasets, auto-label, per-track editing, training with live loss chart.
-import { $, $$, api, busy, toast, on, el } from "./core.js";
+// Train tab: datasets, auto-label, per-track editing, a queue of LoRAs (one per model), live loss chart.
+import { $, $$, api, busy, toast, on, emit, showTab, el } from "./core.js";
 
 let presets = {};
 let ds = null;
 let poll = null;
+let models = [];
 
 async function loadList(select) {
   const { datasets } = await api("/api/datasets");
@@ -99,7 +100,7 @@ function fmtEta(s) {
 
 async function refreshStatus() {
   const st = await api("/api/train/status");
-  $("#t-stage").textContent = st.status === "idle" ? "" : `${st.stage || st.status}${st.error ? `: ${st.error}` : ""}`;
+  $("#t-stage").textContent = st.status === "idle" ? "Nothing training right now." : `${st.run ? `${st.run}: ` : ""}${st.stage || st.status}${st.error ? `: ${st.error}` : ""}`;
   $("#t-epoch").textContent = st.epochs ? `${st.epoch || 0} / ${st.epochs}` : "-";
   $("#t-loss").textContent = st.loss != null ? Number(st.loss).toFixed(4) : "-";
   $("#t-eta").textContent = st.status === "training" ? fmtEta(st.eta_seconds) : "-";
@@ -110,19 +111,79 @@ async function refreshStatus() {
   const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
   log.textContent = (st.log || []).join("\n");
   if (atBottom) log.scrollTop = log.scrollHeight;
-  const running = ["preparing", "preprocessing", "training"].includes(st.status);
-  $("#t-start").disabled = running; $("#t-stop").disabled = !running;
-  return running;
+}
+
+// ── queue ──
+const STATUS = {
+  queued: "Queued", waiting: "Waiting for the GPU", importing: "Copying songs", labeling: "Describing songs",
+  training: "Training", testing: "Test clip", done: "✓ Done", error: "Failed", cancelled: "Cancelled",
+};
+const ACTIVE = ["waiting", "importing", "labeling", "training", "testing"];
+
+function renderModels(list) {
+  models = list;
+  const box = $("#t-models");
+  const checked = new Set($$("input", box).filter((i) => i.checked).map((i) => i.value));
+  const first = !box.children.length;
+  box.replaceChildren(...list.map((m) => el("label", {
+    class: "check", "data-tip": m.installed ? `Train a LoRA for ${m.label}.` : `${m.label} isn't downloaded. Download it with ACE-Step first.`,
+  }, el("input", { type: "checkbox", value: m.variant, disabled: !m.installed,
+    checked: m.installed && (first ? m.variant === (list.find((x) => x.installed && x.variant === "xl_turbo") ? "xl_turbo" : "turbo") : checked.has(m.variant)) }),
+  m.installed ? m.label : `${m.label} (not downloaded)`)));
+}
+
+function jobRow(j) {
+  const act = (what, label, tip, cls = "b small") => el("button", { class: cls, title: tip, onclick: async () => {
+    if (what === "cancel" && ACTIVE.includes(j.status) && !confirm(`Cancel ${j.run_name}? Checkpoints saved so far are kept.`)) return;
+    await api(`/api/train/queue/${j.id}/${what}`, { method: "POST" });
+    refreshQueue();
+  } }, label);
+  const progress = j.status === "training" && j.epochs
+    ? el("div", { class: "progress", style: "margin-top:6px" }, el("i", { style: `width:${Math.min(100, ((j.epoch || 0) / j.epochs) * 100)}%` })) : null;
+  const detail = j.status === "training" && j.epochs
+    ? `Epoch ${j.epoch || 0}/${j.epochs}${j.loss != null ? ` · loss ${Number(j.loss).toFixed(4)}` : ""}${j.eta_seconds != null ? ` · ${fmtEta(j.eta_seconds)} left` : ""}`
+    : j.stage && j.stage !== STATUS[j.status] && j.status !== "done" ? j.stage : "";
+  return el("tr", {},
+    el("td", {}, el("b", {}, j.dataset), el("div", { class: "muted small" }, j.run_name)),
+    el("td", { class: "small" }, j.model_label),
+    el("td", { class: "small" },
+      el("b", { class: j.status === "error" ? "bad" : j.status === "done" ? "good" : "" }, STATUS[j.status] || j.status),
+      detail ? el("div", { class: "muted" }, detail) : null, progress,
+      j.error ? el("div", { class: "bad" }, j.error) : null,
+      ...(j.notes || []).map((n) => el("div", { class: "muted" }, n))),
+    el("td", {}, j.test_song ? el("div", { class: "row", style: "flex-wrap:nowrap" },
+      el("audio", { controls: true, preload: "none", src: `/api/songs/${j.test_song}/audio`, style: "width:180px;height:30px" }),
+      el("button", { class: "b small", title: "Open the test clip in Studio", onclick: () => { emit("open-studio", j.test_song); showTab("studio"); } }, "🎚️"))
+      : el("span", { class: "muted small" }, j.test_clip ? (j.status === "done" ? "-" : "after training") : "off")),
+    el("td", {}, el("div", { class: "row", style: "flex-wrap:nowrap" },
+      j.status === "queued" ? act("up", "▲", "Move up") : null,
+      j.status === "queued" ? act("down", "▼", "Move down") : null,
+      ["queued", "waiting"].includes(j.status) && !j.skip_gate ? act("now", "Start now", "Don't wait for an idle GPU for this job") : null,
+      j.status === "queued" || ACTIVE.includes(j.status) ? act("cancel", "Cancel", "Cancel this job", "b small danger") : null,
+      ["error", "cancelled"].includes(j.status) ? act("retry", "Retry", "Queue it again") : null,
+      ["done", "error", "cancelled"].includes(j.status) ? act("remove", "✕", "Remove from the list (the LoRA stays)") : null)));
+}
+
+async function refreshQueue() {
+  const q = await api("/api/train/queue");
+  renderModels(q.models);
+  const g = q.gpu;
+  $("#t-gpu").textContent = g ? `GPU: ${g.free_gb} of ${g.total_gb} GB free · ${g.util}% busy` : "";
+  $("#t-queue tbody").replaceChildren(...(q.jobs.length ? q.jobs.map(jobRow)
+    : [el("tr", {}, el("td", { colspan: "5", class: "muted small" }, "Nothing queued. Pick a dataset, tick the models in step 3 and press Add to queue."))]));
+  return q.jobs.some((j) => j.status === "queued" || ACTIVE.includes(j.status));
 }
 
 function startPolling() {
-  clearInterval(poll);
+  if (poll) return;
   poll = setInterval(async () => {
+    if (!$("#tab-train").classList.contains("active")) { clearInterval(poll); poll = null; return; }
     try {
-      const running = await refreshStatus();
-      if (!running) { clearInterval(poll); poll = null; }
+      const busyQueue = await refreshQueue();
+      await refreshStatus();
+      if (!busyQueue) { clearInterval(poll); poll = null; }
     } catch { /* server restarting */ }
-  }, 2000);
+  }, 2500);
 }
 
 export async function init() {
@@ -140,6 +201,14 @@ export async function init() {
     await api("/api/datasets", { method: "POST", body: { name, trigger } });
     $("#t-new-name").value = ""; $("#t-new-trigger").value = "";
     await loadList(name); openDs(name);
+  }));
+  $("#t-bring").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const folder = $("#t-existing").value.trim();
+    if (!folder) { toast("Paste the folder that holds dataset.json"); return; }
+    const r = await api("/api/dataset-import", { method: "POST", body: { folder } });
+    toast(`Brought in "${r.name}" with ${r.added} song(s)`);
+    $("#t-existing").value = "";
+    await loadList(r.name); openDs(r.name);
   }));
   $("#t-files").addEventListener("change", async (e) => {
     const fd = new FormData();
@@ -166,25 +235,30 @@ export async function init() {
     }, 2000);
   }));
   $("#t-start").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+    const variants = $$("#t-models input").filter((i) => i.checked).map((i) => i.value);
+    if (!variants.length) { toast("Tick at least one model"); return; }
     await save();
+    const preset = presets[$("#t-preset").value] || {};
     const opts = {
-      run_name: $("#t-run").value.trim() || undefined, model_variant: $("#t-variant").value || undefined,
       adapter_type: $("#t-adapter").value, rank: +$("#t-rank").value, alpha: +$("#t-alpha").value, lr: +$("#t-lr").value,
       epochs: +$("#t-epochs").value, save_every: +$("#t-save-every").value, grad_accum: +$("#t-accum").value,
-      max_duration: +$("#t-maxdur").value || 240, offload_encoder: $("#t-offload").checked,
+      batch_size: preset.batch_size || 1, max_duration: +$("#t-maxdur").value || 240, offload_encoder: $("#t-offload").checked,
     };
-    await api("/api/train/start", { method: "POST", body: { dataset: ds.name, opts } });
-    toast("Training started. ACE-Step pauses until it finishes.");
+    const { jobs } = await api("/api/train/queue", { method: "POST", body: {
+      dataset: ds.name, variants, preset: $("#t-preset").value, opts, run_prefix: $("#t-run").value.trim(),
+      source_folder: $("#t-source").value.trim(), label_missing: $("#t-q-label").checked,
+      transcribe: $("#t-q-transcribe").checked, test_clip: $("#t-q-test").checked,
+    } });
+    toast(`Queued ${jobs.map((j) => j.run_name).join(", ")}`);
+    await refreshQueue();
     startPolling();
   }));
-  $("#t-stop").addEventListener("click", async () => {
-    if (!confirm("Stop training? Checkpoints saved so far are kept.")) return;
-    await api("/api/train/stop", { method: "POST" });
-  });
+  $("#t-q-clear").addEventListener("click", async () => { await api("/api/train/queue/clear", { method: "POST" }); refreshQueue(); });
 
   on("tab", async (t) => {
     if (t !== "train") return;
     await loadList(ds?.name);
-    if (await refreshStatus()) startPolling();
+    await refreshStatus();
+    if (await refreshQueue()) startPolling();
   });
 }

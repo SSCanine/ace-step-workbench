@@ -46,9 +46,12 @@ async function pollStatus() {
     $("#st-ace-text").textContent = s.ace.ready ? "ACE-Step ready" : s.ace.reachable || s.ace.managed ? "ACE-Step loading" : s.ace.installed ? "ACE-Step stopped" : "ACE-Step not installed";
     $("#st-writer").textContent = `Writer: ${s.writer.label.replace(/ \(.*\)$/, "")}`;
     $("#w-writer").textContent = s.writer.label + (s.writer.model ? ` · ${s.writer.model}` : "");
-    const tr = s.training.status;
-    $("#st-train-pill").classList.toggle("hidden", !["preparing", "preprocessing", "training"].includes(tr));
-    $("#st-train").textContent = tr === "training" ? `Training ${s.training.epoch || 0}/${s.training.epochs || "?"}` : "Training: preparing";
+    const tr = s.training.status, q = s.queue || {};
+    const trainingNow = ["preparing", "preprocessing", "training"].includes(tr);
+    $("#st-train-pill").classList.toggle("hidden", !trainingNow && !q.active);
+    $("#st-train").textContent = tr === "training" ? `Training ${s.training.epoch || 0}/${s.training.epochs || "?"}`
+      : trainingNow ? "Training: preparing"
+      : q.status === "waiting" ? "Queue: waiting for the GPU" : `Queue: ${q.stage || q.status}`;
     emit("status", s);
   } catch {
     $("#st-ace").className = "dot bad";
@@ -63,7 +66,8 @@ async function boot() {
   applyTheme(theme);
   $("#set-theme").addEventListener("change", (e) => applyTheme(e.target.value));
 
-  $$(".nav button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  let picked = false;  // a tab clicked while the page is still loading wins over the restored one
+  $$(".nav button").forEach((b) => b.addEventListener("click", () => { picked = true; showTab(b.dataset.tab); }));
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-goto]");
     if (a) { e.preventDefault(); showTab(a.dataset.goto); }
@@ -77,7 +81,7 @@ async function boot() {
   try { first = localStorage.getItem("wb.tab") || (localStorage.getItem("wb.seen") ? "write" : "guide"); localStorage.setItem("wb.seen", "1"); } catch {}
   let restored = "";
   try { restored = await draft.restore(); } catch (e) { console.error("Could not restore the last session", e); }
-  showTab(restored || first);
+  if (!picked) showTab(restored || first);
   draft.start();
   pollStatus();
   setInterval(pollStatus, 3000);

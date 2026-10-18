@@ -48,6 +48,9 @@ DEFAULTS = {
         "outputs_dir": "",
         # More folders to scan for LoRAs (e.g. ones you downloaded).
         "extra_lora_dirs": [],
+        # Training queue: start a job only after the GPU has been idle this long (ComfyUI queue empty,
+        # GPU utilisation under max_util %, no song generating). "Start now" on a job skips it.
+        "gate": {"enabled": True, "idle_minutes": 10, "max_util": 40, "comfy_urls": ["http://127.0.0.1:8188"]},
     },
     "ui": {"show_tips": True},
 }

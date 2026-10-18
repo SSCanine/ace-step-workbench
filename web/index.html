@@ -279,13 +279,22 @@
     <!-- TRAIN -->
     <section id="tab-train" class="page">
       <h1>Train a LoRA</h1>
-      <p class="lead">Teach ACE-Step a sound from your own tracks. Guide section 11 walks through it.</p>
+      <p class="lead">Teach ACE-Step a sound from your own tracks. Queue LoRAs for one or more models; they train one after another when the GPU is free. Guide section 11 walks through it.</p>
+      <div class="card" id="t-queue-card">
+        <div class="row"><h2 style="margin:0">Queue</h2><span class="muted small" id="t-gpu"></span><span class="spacer"></span>
+          <button class="b small" id="t-q-clear" data-tip="Remove finished, failed and cancelled jobs from the list. Their LoRAs stay.">Clear finished</button></div>
+        <div style="overflow-x:auto;margin-top:8px"><table class="list" id="t-queue"><thead><tr><th>Dataset</th><th>Model</th><th style="min-width:240px">Status</th><th>Test clip</th><th></th></tr></thead><tbody></tbody></table></div>
+      </div>
       <div class="card">
         <div class="row">
           <select id="t-ds" style="flex:1" aria-label="Dataset"><option value="">Pick a dataset...</option></select>
           <input type="text" id="t-new-name" placeholder="New dataset name" style="width:200px">
           <input type="text" id="t-new-trigger" placeholder="Trigger word e.g. zxsynth" style="width:200px" data-tip="A made-up word that will switch your style on. Use something that is not a real word.">
           <button class="b" id="t-create">+ Create</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="t-existing" placeholder="...or bring in a labeled dataset: a folder with dataset.json" style="flex:1" data-tip="A dataset made by ACE-Step's dataset builder (or another Workbench): its songs are copied and their captions, lyrics, BPM and key come along.">
+          <button class="b" id="t-bring" data-busy="Copying...">Bring in</button>
         </div>
       </div>
       <div id="t-body" class="hidden">
@@ -313,12 +322,18 @@
           <div style="overflow-x:auto;margin-top:10px"><table class="list" id="t-samples"><thead><tr><th>File</th><th style="min-width:260px">Caption</th><th>BPM</th><th>Key</th><th>Instr.</th><th>Lyrics</th><th></th></tr></thead><tbody></tbody></table></div>
         </div>
         <div class="card">
-          <h2>3. Train</h2>
-          <div class="grid g3">
+          <h2>3. Make LoRAs</h2>
+          <div class="f"><span class="small muted">Models <i class="tip" data-tip="One LoRA per model: a LoRA only works on the model it was trained for. XL Turbo is the biggest and best-sounding; Turbo is half the size and twice as fast to train. Models that aren't downloaded are greyed out.">i</i></span>
+            <div class="row" id="t-models" style="margin-top:4px"></div></div>
+          <div class="grid g3" style="margin-top:10px">
             <label class="f"><span>Preset</span><select id="t-preset"></select></label>
-            <label class="f"><span>Run name</span><input type="text" id="t-run" placeholder="auto"></label>
-            <label class="f"><span>Train against <i class="tip" data-tip="The model the LoRA is made for. Use it with the same model in Create. Turbo is fastest; Base is the classic training target.">i</i></span>
-              <select id="t-variant"><option value="">Same as current model</option><option value="turbo">Turbo</option><option value="base">Base</option><option value="sft">SFT</option><option value="xl_turbo">XL Turbo</option><option value="xl_base">XL Base</option></select></label>
+            <label class="f"><span>Name <i class="tip" data-tip="LoRAs are named name-model, e.g. myset-xl-turbo. Empty = the dataset's name.">i</i></span><input type="text" id="t-run" placeholder="dataset name"></label>
+            <label class="f"><span>Copy new songs from <i class="tip" data-tip="Optional. When the job starts, songs in this folder that aren't in the dataset yet are copied in (and described, if ticked below).">i</i></span><input type="text" id="t-source" placeholder="optional folder"></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label class="check" data-tip="Songs without a caption are described by ACE-Step (needs its LM) before training."><input type="checkbox" id="t-q-label" checked> Describe songs that have no caption</label>
+            <label class="check" data-tip="While describing, also transcribe lyrics from vocal songs (slower; check them after)."><input type="checkbox" id="t-q-transcribe"> Transcribe lyrics</label>
+            <label class="check" data-tip="After training, render 45 seconds on the model the LoRA was made for. It shows up on the job and in the Library."><input type="checkbox" id="t-q-test" checked> Make a test clip</label>
           </div>
           <p class="muted small" id="t-preset-about"></p>
           <details><summary>Advanced</summary>
@@ -334,12 +349,13 @@
             </div>
             <label class="check" style="margin-top:8px" data-tip="Move the text encoder and VAE to CPU after setup. Saves 2-4 GB VRAM."><input type="checkbox" id="t-offload"> Low-VRAM mode</label>
           </details>
-          <div class="notice warn small">Training stops ACE-Step while it runs to free the GPU, then restarts it. Close games and other AI apps first.</div>
+          <div class="notice small">Each job waits until the GPU has been idle for a while (Settings > Training queue), or press <b>Start now</b> on it. ACE-Step pauses while a LoRA trains and comes back when the queue is empty.</div>
           <div class="row">
-            <span class="muted small" id="t-stage"></span><span class="spacer"></span>
-            <button class="b danger" id="t-stop">Stop</button>
-            <button class="b primary" id="t-start" data-busy="Starting...">Start training</button>
+            <span class="spacer"></span>
+            <button class="b primary" id="t-start" data-busy="Adding...">Add to queue</button>
           </div>
+          <h3>Current run</h3>
+          <div class="row"><span class="muted small" id="t-stage">Nothing training right now.</span></div>
           <div class="grid g4" style="margin-top:10px">
             <div><div class="muted small">Epoch</div><b id="t-epoch">-</b></div>
             <div><div class="muted small">Loss</div><b id="t-loss">-</b></div>
@@ -413,6 +429,18 @@
         </div>
         <label class="f" style="margin-top:10px"><span>More LoRA folders (one per line) <i class="tip" data-tip="Folders with LoRAs you downloaded or trained elsewhere. Any folder with adapter_config.json shows up in Create.">i</i></span><textarea name="extra_lora_dirs" style="min-height:60px"></textarea></label>
         <div class="row" style="margin-top:10px"><button class="b primary" id="set-train-save">Save</button></div>
+      </div>
+
+      <div class="card" id="set-gate">
+        <h2>Training queue</h2>
+        <p class="muted small">Queued LoRAs start only once the GPU has been free for a while, so training never fights your renders or games. "Start now" on a job skips the wait.</p>
+        <div class="row">
+          <label class="check"><input type="checkbox" name="enabled"> Wait for an idle GPU</label>
+          <label class="f" style="width:150px"><span>Idle for (minutes)</span><input type="number" name="idle_minutes" min="0" max="240"></label>
+          <label class="f" style="width:170px"><span>"Busy" above (% GPU) <i class="tip" data-tip="GPU utilisation that counts as busy. Video playback and the desktop use a little; renders and games use a lot.">i</i></span><input type="number" name="max_util" min="1" max="100"></label>
+        </div>
+        <label class="f" style="margin-top:10px"><span>ComfyUI addresses (one per line) <i class="tip" data-tip="While any of these has renders queued the GPU counts as busy. Before training, they're asked to unload their models to free GPU memory. Leave the default if you don't use ComfyUI.">i</i></span><textarea name="comfy_urls" style="min-height:50px"></textarea></label>
+        <div class="row" style="margin-top:10px"><button class="b primary" id="set-gate-save">Save</button></div>
       </div>
 
       <div class="card">

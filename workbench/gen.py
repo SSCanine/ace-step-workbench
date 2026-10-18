@@ -14,7 +14,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import ace, library
+from . import ace, config, library, training
 
 MAX_SEED = 2**31 - 1
 
@@ -91,6 +91,29 @@ class Jobs:
         self.loaded_lora, self.lora_on = None, False
 
     # ── LoRA handling ──
+    def _match_model(self, settings: dict, form: dict, job_id: str) -> None:
+        """A LoRA only works with the model it was trained for: switch ACE-Step to that model first."""
+        path = (form.get("lora") or "").strip()
+        variant = training.adapter_lineage(Path(path))[0] if path else ""
+        model = training.MODEL_FOR_VARIANT.get(variant)
+        if not model:
+            return
+        if not variant.endswith("turbo") and int(form.get("inference_steps") or 8) <= 8:
+            form["inference_steps"], form["shift"] = 50, 1.0  # base/SFT models need full step counts
+        current = self.server.model if self.server.managed else (
+            ace.AceClient(settings).health().get("loaded_model") or settings["ace"]["dit_model"])
+        if current == model:
+            return
+        label = training.VARIANT_LABEL[variant]
+        if not self.server.managed:
+            raise ace.AceError(f"This LoRA was made for {label}, but ACE-Step is running {current}. "
+                               f"Set Settings > Music model to {label} and restart ACE-Step.")
+        self._set(job_id, stage=f"Switching ACE-Step to {label} (this LoRA was made for it)")
+        config.save({"ace": {"dit_model": model}})
+        settings["ace"]["dit_model"] = model
+        self.server.restart(settings)
+        self.reset_lora()
+
     def _apply_lora(self, client: ace.AceClient, settings: dict, form: dict, job_id: str) -> None:
         path = (form.get("lora") or "").strip()
         scale = float(form.get("lora_scale") or 1.0)
@@ -130,6 +153,7 @@ class Jobs:
         client = ace.AceClient(settings)
         try:
             with self.gpu:
+                self._match_model(settings, form, job_id)
                 if not client.health().get("models_initialized"):
                     if not self.server.managed:
                         # An ACE-Step server started elsewhere may be lazy-loading: ask it to load now.

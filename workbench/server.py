@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ace, config, gen, importer, library, llm, songmeta, suno, training, writer
+from . import ace, config, gen, importer, library, llm, songmeta, suno, trainqueue, training, writer
 
 WEB = config.ROOT / "web"
 AUTOSTART_OVERRIDE: bool | None = None
@@ -22,6 +22,7 @@ AUTOSTART_OVERRIDE: bool | None = None
 server = ace.AceServer()
 jobs = gen.Jobs(server)
 trainer = training.Trainer(server, jobs.gpu, on_server_restart=jobs.reset_lora)
+train_queue = trainqueue.TrainQueue(server, jobs, trainer)
 autolabel_state: dict = {"status": "idle"}
 
 DIT_MODELS = [
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
             server.start(s)
         except Exception as e:
             server.last_error = str(e)
+    train_queue.start_worker()
     yield
     trainer.stop()
     server.stop()
@@ -118,6 +120,7 @@ def status():
         "writer": {"preset": s["llm"]["preset"], "label": llm.PRESETS.get(s["llm"]["preset"], {}).get("label", s["llm"]["preset"]),
                    "model": s["llm"]["model"]},
         "training": {"status": trainer.state.get("status"), "epoch": trainer.state.get("epoch"), "epochs": trainer.state.get("epochs")},
+        "queue": train_queue.summary(),
     }
 
 
@@ -515,3 +518,41 @@ def train_stop():
 @app.get("/api/train/status")
 def train_status():
     return trainer.status()
+
+
+# ── training queue ────────────────────────────────────────────────────
+
+@app.get("/api/train/queue")
+def queue_list():
+    s = config.load()
+    return {"jobs": train_queue.list(), "models": training.model_variants(s), "gate": s["training"]["gate"],
+            "gpu": trainqueue.gpu_stats(), "current_model": server.model if server.managed else s["ace"]["dit_model"]}
+
+
+@app.post("/api/train/queue")
+async def queue_add(req: Request):
+    b = await req.json()
+    added = train_queue.add(config.load(), b.get("dataset", ""), b.get("variants") or [], b.get("preset") or "balanced",
+                            b.get("opts") or {}, source_folder=(b.get("source_folder") or "").strip(),
+                            run_prefix=(b.get("run_prefix") or "").strip(), label_missing=b.get("label_missing", True),
+                            transcribe=bool(b.get("transcribe")), test_clip=b.get("test_clip", True))
+    return {"jobs": added}
+
+
+@app.post("/api/train/queue/clear")
+def queue_clear():
+    train_queue.clear_finished()
+    return {"ok": True}
+
+
+@app.post("/api/train/queue/{job_id}/{what}")
+def queue_action(job_id: str, what: str):
+    train_queue.action(job_id, what)
+    return {"ok": True}
+
+
+@app.post("/api/dataset-import")
+async def dataset_import_existing(req: Request):
+    """A dataset labeled elsewhere (folder with dataset.json + songs) becomes a Workbench dataset."""
+    b = await req.json()
+    return training.import_dataset(config.load(), (b.get("folder") or "").strip(), (b.get("name") or "").strip())

@@ -170,11 +170,13 @@ Hold the line... hold the line
       <li><b>Collect 8-30 songs</b> that share the sound you want. Use music you own or have the rights to. Full-length, good-quality files (WAV/FLAC/MP3 320).</li>
       <li><b>Train tab &rarr; New dataset.</b> Name it, add the files. Pick a <b>trigger word</b>: a made-up token like <code>zxsynth</code> that you'll put in captions later.</li>
       <li><b>Describe each track.</b> Press <b>Auto-label</b> to have ACE-Step estimate BPM, key and a caption for every file; fix anything wrong. Add lyrics for vocal tracks (or mark them instrumental). Better labels = better LoRA.</li>
-      <li><b>Preprocess.</b> Converts audio to training tensors (a few minutes).</li>
-      <li><b>Train.</b> Start with the <b>Balanced</b> preset. Watch the loss chart: it should drop then flatten. Checkpoints are saved along the way.</li>
-      <li><b>Use it.</b> In Create, pick the LoRA, set strength 0.6-1.0, and start your caption with the trigger word.</li>
+      <li><b>Make LoRAs.</b> In step 3, tick the models to train for and press <b>Add to queue</b>. Each model gets its own LoRA (named <code>name-xl-turbo</code>, <code>name-turbo</code>...), because a LoRA only works on the model it was trained for. Start with the <b>Balanced</b> preset.</li>
+      <li><b>Let the queue run.</b> Jobs run one after another at the top of the Train tab. Each waits until the GPU has been idle for a while (Settings &gt; Training queue), then pauses ACE-Step, trains, and makes a 45-second <b>test clip</b> you can play right on the job. <b>Start now</b> skips the wait; <b>Cancel</b> keeps the checkpoints saved so far. Jobs survive a restart.</li>
+      <li><b>Use it.</b> In Create, pick the LoRA and set strength 0.6-1.0. Each LoRA shows the model it was made for; if ACE-Step is running another model, generating switches it first. The trigger word is added to your caption for you.</li>
     </ol>
-    <div class="notice warn">Training uses the GPU heavily. Close games and other AI apps first. The Workbench stops generation while training.</div>
+    <p><b>Which model?</b> XL Turbo is the biggest and sounds best, but trains about twice as long and needs more GPU memory. Turbo is quick for testing a dataset. Base and SFT need 50 steps to generate and are mainly for advanced use.</p>
+    <p><b>Datasets from elsewhere:</b> a folder with <code>dataset.json</code> (made by ACE-Step's dataset builder) can be brought in with its captions, lyrics, BPM and key. <b>Copy new songs from</b> on a job adds songs from a folder when the job starts, and <b>Describe songs that have no caption</b> labels them before training.</p>
+    <div class="notice warn">Training uses the GPU heavily. The queue waits for an idle GPU, but close games and other AI apps if a job waits for free memory.</div>
     <div id="g-lora-params"></div>
 
     <h2 id="g-trouble">12. Troubleshooting</h2>

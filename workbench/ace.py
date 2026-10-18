@@ -90,6 +90,7 @@ class AceServer:
         self.lock = threading.Lock()
         self.started_at = 0.0
         self.last_error = ""
+        self.model = ""  # the DiT model the managed server was started with
 
     def _sink(self, line: str) -> None:
         self.log.append(line)
@@ -124,6 +125,7 @@ class AceServer:
             self.log.append(f"[workbench] starting ACE-Step: {' '.join(cmd)}")
             self.log.append(f"[workbench] DiT={a['dit_model']}  LM={a['lm_model'] if a['init_lm'] else 'off'}")
             self.proc = popen_logged(cmd, ace_dir, env, self._sink)
+            self.model = a["dit_model"]
             self.started_at = time.time()
             self.last_error = ""
 

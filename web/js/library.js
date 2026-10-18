@@ -7,7 +7,7 @@ let timer;
 
 async function load() {
   const { songs } = await api(`/api/songs?q=${encodeURIComponent($("#l-q").value)}`);
-  const kinds = { new: "new", remix: "same seed", variation: "variation", repaint: "re-sung", import: "imported" };
+  const kinds = { new: "new", remix: "same seed", variation: "variation", repaint: "re-sung", import: "imported", test: "LoRA test" };
   const rows = songs.map((s) => el("tr", {},
     el("td", {}, el("b", {}, s.title || "Untitled"), el("div", { class: "muted small" }, (s.caption || "").slice(0, 90))),
     el("td", { class: "small" }, new Date(s.created * 1000).toLocaleString()),
