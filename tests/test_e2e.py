@@ -119,7 +119,14 @@ def test_dataset_and_training_flow(env, monkeypatch):
                 (out / (s["filename"] + ".pt")).write_bytes(b"t")
             print("[OK] preprocessed", len(ds["samples"]))
         else:
+            import os
             assert "--rank" in a and arg("--model-variant") == "turbo"
+            # like ACE-Step's path_safety: training data must sit under the working folder
+            root = os.path.realpath(os.getcwd())
+            assert os.path.realpath(arg("--dataset-dir")).startswith(root + os.sep), (root, arg("--dataset-dir"))
+            if (pathlib.Path(arg("--dataset-dir")).parent / "FAIL").exists():
+                print("  TRAINING FAILED -- 0 steps executed")
+                sys.exit(0)
             ep = int(arg("--epochs"))
             for e in range(1, ep + 1):
                 print(f"Epoch {e}/{ep}, Step {e*2}, Loss: {1.0/e:.4f}", flush=True)
@@ -162,6 +169,19 @@ def test_dataset_and_training_flow(env, monkeypatch):
     assert st["epoch"] == 3 and abs(st["loss"] - 0.3333) < 1e-3 and len(st["epoch_losses"]) == 3
     loras = c.get("/api/loras").json()["loras"]
     assert len(loras) == 1 and loras[0]["trigger"] == "zxsynth" and loras[0]["label"] == "run1/final"
+
+    # ACE's trainer reports some failures only in its output and still exits 0
+    ds_dir = Path(c.get("/api/settings").json()["settings"]["training"]["datasets_dir"] or
+                  (Path(fake_ace).parent / "data" / "datasets")) / "my set"
+    (ds_dir / "FAIL").write_text("x")
+    assert c.post("/api/train/start", json={"dataset": "my set", "opts": {"epochs": 3, "run_name": "run2"}}).status_code == 200
+    t0 = time.time()
+    while time.time() - t0 < 30:
+        st = c.get("/api/train/status").json()
+        if st["status"] in ("done", "error"):
+            break
+        time.sleep(0.3)
+    assert st["status"] == "error" and "Training failed" in st["error"], st
 
 
 def test_ace_folder_check(env, tmp_path):

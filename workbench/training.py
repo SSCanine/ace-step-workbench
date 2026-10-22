@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import threading
@@ -303,6 +304,16 @@ def merge_labels(ds: dict, labeled: list[dict], overwrite: bool) -> int:
     return n
 
 
+def _train_cwd(fallback: Path, *paths: Path) -> Path:
+    """Folder to run ACE's trainer from. ACE-Step's path_safety only lets training read paths under the
+    trainer's working folder, and Workbench datasets live outside the ACE folder, so run it from the
+    common parent of the dataset and output folders."""
+    try:
+        return Path(os.path.commonpath([str(p.resolve()) for p in paths]))
+    except ValueError:  # different drives
+        return fallback
+
+
 def _ds_hash(ds: dict) -> str:
     return hashlib.sha1(json.dumps(ds["samples"], sort_keys=True).encode()).hexdigest()[:12]
 
@@ -433,6 +444,10 @@ class Trainer:
         if proc is not None:
             ace.kill_tree(proc)
 
+    def _failed_quietly(self) -> bool:
+        """ACE's trainer catches its own errors and still exits 0; its banner is the only sign."""
+        return any("TRAINING FAILED" in line for line in self.log[-60:])
+
     def _exec(self, cmd: list[str], cwd: Path) -> int:
         self._sink("[workbench] $ " + " ".join(cmd))
         self.proc = ace.popen_logged(cmd, cwd, ace.base_env(), self._sink)
@@ -488,7 +503,7 @@ class Trainer:
                 (out / "run.json").write_text(json.dumps(run, indent=2), encoding="utf-8")
                 self.state.update(status="training", stage="Training")
                 base = variant.endswith("base") or variant.endswith("sft")
-                cmd = [py, "train.py", "--plain", "--yes", "fixed", "--checkpoint-dir", ckpt,
+                cmd = [py, str(ace_dir / "train.py"), "--plain", "--yes", "fixed", "--checkpoint-dir", ckpt,
                        "--model-variant", variant, "--dataset-dir", str(tensors), "--output-dir", str(out),
                        "--adapter-type", opts.get("adapter_type", "lora"),
                        "--lr", str(opts.get("lr", 1e-4)), "--epochs", str(int(opts.get("epochs", 200))),
@@ -503,9 +518,11 @@ class Trainer:
                     cmd += ["--rank", str(int(opts.get("rank", 64))), "--alpha", str(int(opts.get("alpha", 128)))]
                 if opts.get("offload_encoder"):
                     cmd.append("--offload-encoder")
-                code = self._exec(cmd, ace_dir)
+                code = self._exec(cmd, _train_cwd(d, tensors, out))
                 if self._stop:
                     raise RuntimeError("Stopped. Checkpoints saved so far are kept.")
+                if code == 0 and self._failed_quietly():
+                    code = 1
                 if code != 0:
                     raise RuntimeError(f"Training failed (exit {code}). See the log.")
             self.state.update(status="done", stage="Done", output=str(out))
