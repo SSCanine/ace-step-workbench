@@ -34,7 +34,7 @@ Two separate Python environments, on purpose:
 1. **Tell the user before big downloads.** A full install downloads roughly 15 GB (ACE-Step environment about 5 GB + models about 10 GB) and takes 15-45 minutes. Confirm before starting.
 2. **Ask before using the GPU** for a test song or training. Installing is fine; generating is the user's call.
 3. **Never commit or upload `data/`.** It holds API keys and the user's music.
-4. **Don't edit files inside the ACE-Step folder.** Configure it through the Workbench's Settings or `data/settings.json`.
+4. **Don't edit files inside the ACE-Step folder.** Configure it through the Workbench's Settings or `data/settings.json`. (The Workbench itself applies one small known fix there, see Facts.)
 5. **Don't delete anything** the user didn't ask you to. The app itself moves deleted songs to `data/trash/`.
 6. **Long commands:** `uv sync` and the model download print progress for many minutes. Use long timeouts (30+ minutes) and don't kill them for being quiet.
 7. **No interactive prompts:** set `WB_NO_PAUSE=1` when running the `.bat` scripts so they never wait for a key press.
@@ -156,5 +156,6 @@ Tell the user:
 - Workbench URL: `http://127.0.0.1:3470` (default). ACE-Step API: `http://127.0.0.1:8001`.
 - Settings file: `data/settings.json` (merged over defaults in `workbench/config.py`; edit through the UI or `POST /api/settings`).
 - ACE-Step pinned commit: see `PINNED` in `install.py`. Upstream: https://github.com/ACE-Step/ACE-Step-1.5
+- Known ACE-Step bug (still in upstream main as of the pinned commit): `acestep/training_v2/cli/args.py` `VARIANT_DIR_MAP` lacks the XL variants, so `train.py fixed --model-variant xl_turbo` fails with "Model directory not found ... xl_turbo". `workbench/ace_patches.py` adds `xl_turbo` / `xl_base` / `xl_sft` (idempotent, a no-op once upstream fixes it). The installer runs it, and so does every XL training run, which covers installs reused with `--ace-path` / `--no-ace`.
 - Health/status: `GET /api/status`. ACE-Step server log: `GET /api/ace/log`. Start/stop ACE-Step: `POST /api/ace/start` / `POST /api/ace/stop` (with `X-Workbench: 1`).
 - On Windows the app forces ACE-Step's LM backend to `pt` (vllm needs Triton, not available there).

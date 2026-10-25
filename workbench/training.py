@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import ace, config
+from . import ace, ace_patches, config
 
 AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".opus", ".m4a"}
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}$")
@@ -477,6 +477,8 @@ class Trainer:
                     raise RuntimeError("Stopped.")
                 if self.before_train:
                     self.before_train(variant)
+                if variant.startswith("xl") and ace_patches.patch_xl_variant_map(ace_dir) == "patched":
+                    self._sink("[Workbench] Added the XL models to ACE-Step's trainer variant map (known ACE-Step bug).")
                 # preprocess (skipped when the dataset has not changed since last time)
                 h = _ds_hash(ds) + variant
                 stamp = tensors / ".workbench_hash"

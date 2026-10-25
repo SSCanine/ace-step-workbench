@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-from workbench import ace, config  # noqa: E402
+from workbench import ace, ace_patches, config  # noqa: E402
 
 REPO = "https://github.com/ACE-Step/ACE-Step-1.5"
 PINNED = "ca1e85fe9430179831e6bc6be790c332190a3866"  # tested with this Workbench release
@@ -83,6 +83,9 @@ def main() -> None:
             fetch_ace(ace_dir, args.latest)
         else:
             say(f"ACE-Step already present at {ace_dir}")
+
+    if ace_patches.patch_xl_variant_map(ace_dir) == "patched":
+        say("Applied a small fix to ACE-Step so it can train LoRAs on the XL models.")
 
     if not ace.venv_python(ace_dir).exists():
         uv = shutil.which("uv")
